@@ -29,9 +29,10 @@
 // size of plate
 #define COLUMNS    1000
 #define ROWS       1000
+#define CHUNK (ROWS / 10)
 
 // largest permitted change in temp (This value takes about 3400 steps)
-#define MAX_TEMP_ERROR 0.01
+#define MAX_TEMP_ERROR 0.001
 
 double Temperature[ROWS+2][COLUMNS+2];      // temperature grid
 double Temperature_last[ROWS+2][COLUMNS+2]; // temperature grid from last iteration
@@ -39,6 +40,7 @@ double Temperature_last[ROWS+2][COLUMNS+2]; // temperature grid from last iterat
 //   helper routines
 void initialize();
 void track_progress(int iter);
+void sim_block(int, int);
 
 
 int main(int argc, char *argv[]) {
@@ -49,6 +51,9 @@ int main(int argc, char *argv[]) {
     double dt=100;                                       // largest change in t
     struct timeval start_time, stop_time, elapsed_time;  // timers
 
+    int thread_count = omp_get_num_threads();
+    printf("%d threads runnning\n", thread_count);
+
     printf("Maximum iterations [100-4000]?\n");
     scanf("%d", &max_iterations);
 
@@ -56,10 +61,43 @@ int main(int argc, char *argv[]) {
 
     initialize();                   // initialize Temp_last including boundary conditions
 
+    double GFLOPS, etime;
+    double j_avg = 0, u_avg = 0;
     // do until error is minimal or until max steps
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
+        /*********************************
+         * BLOCK LAPLACE
+        *********************************/
+
+        double start = omp_get_wtime( );
+        /*
+        # pragma omp parallel for //private(j)// schedule(runtime)
+        for(i = 1; i <= ROWS-(CHUNK-1); i+=100) {
+            # pragma omp parallel for //private(j)// schedule(runtime)
+            for(j = 1; j <= COLUMNS-(CHUNK-1); j+=100) {
+                sim_block(i,j);
+            }
+        }
+
+        dt = 0.0; // reset largest temperature change
+
+        // copy grid to old grid for next iteration and find latest dt
+        //clock_t start1 = clock(), diff1;
+        # pragma omp parallel for reduction(max:dt) private (j)// schedule(static)
+        for(i = 1; i <= ROWS; i++){
+            for(j = 1; j <= COLUMNS; j++){
+                dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
+                Temperature_last[i][j] = Temperature[i][j];
+            }
+        }
+        double end = omp_get_wtime();
+        etime = (end-start);
+        */
+
+        /*********************************/
 
         // main calculation: average my four neighbors
+        //clock_t start = clock(), diff;
         # pragma omp parallel for private(j)// schedule(runtime)
         for(i = 1; i <= ROWS; i++) {
             for(j = 1; j <= COLUMNS; j++) {
@@ -67,22 +105,31 @@ int main(int argc, char *argv[]) {
                                             Temperature_last[i][j+1] + Temperature_last[i][j-1]);
             }
         }
-        
+
         dt = 0.0; // reset largest temperature change
 
         // copy grid to old grid for next iteration and find latest dt
-        # pragma omp parallel for reduction(max:dt) private (j) //schedule(runtime)
+        //clock_t start1 = clock(), diff1;
+        # pragma omp parallel for reduction(max:dt) private (j) schedule(static)
         for(i = 1; i <= ROWS; i++){
             for(j = 1; j <= COLUMNS; j++){
                 dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
                 Temperature_last[i][j] = Temperature[i][j];
             }
         }
+        double end = omp_get_wtime();
+        etime = (end-start);
+
+        // (rows*cols)/10^9 * (4/et1+1/et2)
+        GFLOPS = (1./1000.) * (5./etime);// / iteration;
 
         // periodically print test values
         if((iteration % 100) == 0) {
          track_progress(iteration);
          printf("dt: %f, T[1000][1000]: %f\n", dt, Temperature_last[1000][1000]);
+         //printf("Jacobi update running avg: %d milliseconds\n", j_avg);
+         //printf("Max and matrix copy running avg: %d milliseconds\n", u_avg);
+         printf("Avg GFLOPS - %f\n", GFLOPS);
         }
 
     iteration++;
@@ -91,11 +138,22 @@ int main(int argc, char *argv[]) {
     gettimeofday(&stop_time,NULL);
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
+    printf("T[%d][%d] = %f\n", 250,900,Temperature[250][900]);
     printf("\nMax error at iteration %d was %f\n", iteration-1, dt);
     printf("Total time was %f seconds.\n", elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0);
 
 }
 
+void sim_block(int i, int j) {
+    int row_end = i+(CHUNK-1);
+    int col_end = j+(CHUNK-1);
+    int col_start = j;
+    for(; i <= row_end; i++)
+        for (j=col_start; j <= col_end; j++) {
+            Temperature[i][j] = 0.25 * (Temperature_last[i+1][j] + Temperature_last[i-1][j] +
+                                        Temperature_last[i][j+1] + Temperature_last[i][j-1]);
+        }
+}
 
 // initialize plate and boundary conditions
 // Temp_last is used to to start first iteration
@@ -128,11 +186,21 @@ void initialize(){
 // print diagonal in bottom right corner where most action is
 void track_progress(int iteration) {
 
-    int i;
+    int i,j;
 
     printf("---------- Iteration number: %d ------------\n", iteration);
-    for(i = ROWS-5; i <= ROWS; i++) {
-        printf("[%d,%d]: %5.2f  ", i, i, Temperature[i][i]);
+    /*
+    for(i = 0; i <= ROWS; i+= 100) {
+        for (j = 0; j <= COLUMNS; j+=100)
+            printf("%5.2f  ", Temperature[i][i]);
+        printf("| %5.2f \n", Temperature_last[i][1001]);
     }
+    printf("---------------------------------------------------------------------------\n");
+    for(i = 0; i <= ROWS; i+= 100)
+            printf("%5.2f  ", Temperature_last[1001][i]);
+        printf("\n");
+            //printf("[%d,%d]: %5.2f  ", i, i, Temperature[i][i]);
+    */
+    printf("Test point [%d,%d]: %5.2f  ", 250, 900, Temperature[250][900]);
     printf("\n");
 }

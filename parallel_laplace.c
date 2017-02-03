@@ -32,7 +32,7 @@
 #define CHUNK (ROWS / 10)
 
 // largest permitted change in temp (This value takes about 3400 steps)
-#define MAX_TEMP_ERROR 0.001
+#define MAX_TEMP_ERROR 0.01
 
 double Temperature[ROWS+2][COLUMNS+2];      // temperature grid
 double Temperature_last[ROWS+2][COLUMNS+2]; // temperature grid from last iteration
@@ -52,29 +52,34 @@ int main(int argc, char *argv[]) {
     struct timeval start_time, stop_time, elapsed_time;  // timers
 
     int thread_count = omp_get_num_threads();
-    printf("%d threads runnning\n", thread_count);
 
     printf("Maximum iterations [100-4000]?\n");
-    scanf("%d", &max_iterations);
-
-    gettimeofday(&start_time,NULL); // Unix timer
+    //scanf("%d", &max_iterations);
+    max_iterations=10000;
+	//omp_set_num_threads(1);
 
     initialize();                   // initialize Temp_last including boundary conditions
+	printf("Num threads: %d\n", omp_get_num_threads());
+	printf("Num procs: %d\n", omp_get_num_procs());
+	omp_set_num_threads(omp_get_num_procs());
+	printf("Num threads: %d\n", omp_get_num_threads());
 
-    double GFLOPS, etime;
     double j_avg = 0, u_avg = 0;
+
+    gettimeofday(&start_time,NULL); // Unix timer
+    double start = omp_get_wtime( );
+
     // do until error is minimal or until max steps
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
         /*********************************
          * BLOCK LAPLACE
         *********************************/
 
-        double start = omp_get_wtime( );
-        /*
+	/*
         # pragma omp parallel for //private(j)// schedule(runtime)
-        for(i = 1; i <= ROWS-(CHUNK-1); i+=100) {
+        for(i = 1; i <= ROWS-(CHUNK-1); i+=CHUNK) {
             # pragma omp parallel for //private(j)// schedule(runtime)
-            for(j = 1; j <= COLUMNS-(CHUNK-1); j+=100) {
+            for(j = 1; j <= COLUMNS-(CHUNK-1); j+=CHUNK) {
                 sim_block(i,j);
             }
         }
@@ -83,17 +88,14 @@ int main(int argc, char *argv[]) {
 
         // copy grid to old grid for next iteration and find latest dt
         //clock_t start1 = clock(), diff1;
-        # pragma omp parallel for reduction(max:dt) private (j)// schedule(static)
+        # pragma omp parallel for reduction(max:dt) private (j) schedule(static)
         for(i = 1; i <= ROWS; i++){
             for(j = 1; j <= COLUMNS; j++){
                 dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
                 Temperature_last[i][j] = Temperature[i][j];
             }
         }
-        double end = omp_get_wtime();
-        etime = (end-start);
-        */
-
+	*/
         /*********************************/
 
         // main calculation: average my four neighbors
@@ -117,11 +119,6 @@ int main(int argc, char *argv[]) {
                 Temperature_last[i][j] = Temperature[i][j];
             }
         }
-        double end = omp_get_wtime();
-        etime = (end-start);
-
-        // (rows*cols)/10^9 * (4/et1+1/et2)
-        GFLOPS = (1./1000.) * (5./etime);// / iteration;
 
         // periodically print test values
         if((iteration % 100) == 0) {
@@ -129,13 +126,20 @@ int main(int argc, char *argv[]) {
          printf("dt: %f, T[1000][1000]: %f\n", dt, Temperature_last[1000][1000]);
          //printf("Jacobi update running avg: %d milliseconds\n", j_avg);
          //printf("Max and matrix copy running avg: %d milliseconds\n", u_avg);
-         printf("Avg GFLOPS - %f\n", GFLOPS);
         }
 
     iteration++;
     }
 
     gettimeofday(&stop_time,NULL);
+
+    double end = omp_get_wtime();
+    double etime = end-start;
+
+    double GFLOPS = (double)(iteration-1 * 5);/// (end-start);
+    //printf("iters: %d\n", iteration-1);
+    printf("GFLOPS: %f\n", (double)(iteration-1*5));
+
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
     printf("T[%d][%d] = %f\n", 250,900,Temperature[250][900]);

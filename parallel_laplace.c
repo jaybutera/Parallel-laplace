@@ -32,7 +32,7 @@
 #define CHUNK (ROWS / 10)
 
 // largest permitted change in temp (This value takes about 3400 steps)
-#define MAX_TEMP_ERROR 0.01
+#define MAX_TEMP_ERROR 0.1
 
 double Temperature[ROWS+2][COLUMNS+2];      // temperature grid
 double Temperature_last[ROWS+2][COLUMNS+2]; // temperature grid from last iteration
@@ -136,9 +136,9 @@ int main(int argc, char *argv[]) {
     double end = omp_get_wtime();
     double etime = end-start;
 
-    double GFLOPS = (double)(iteration-1 * 5);/// (end-start);
+    double GFLOPS = (double)(iteration-1 )*5.f*ROWS*COLUMNS / (1000000000.f*(end-start));
     //printf("iters: %d\n", iteration-1);
-    printf("GFLOPS: %f\n", (double)(iteration-1*5));
+    printf("GFLOPS: %f\n", GFLOPS);
 
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 

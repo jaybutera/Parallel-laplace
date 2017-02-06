@@ -32,7 +32,7 @@
 #define CHUNK (ROWS / 10)
 
 // largest permitted change in temp (This value takes about 3400 steps)
-#define MAX_TEMP_ERROR 0.1
+#define MAX_TEMP_ERROR 0.01
 
 double Temperature[ROWS+2][COLUMNS+2];      // temperature grid
 double Temperature_last[ROWS+2][COLUMNS+2]; // temperature grid from last iteration
@@ -56,13 +56,9 @@ int main(int argc, char *argv[]) {
     printf("Maximum iterations [100-4000]?\n");
     //scanf("%d", &max_iterations);
     max_iterations=10000;
-	//omp_set_num_threads(1);
+	//omp_set_nuthreads(4);
 
     initialize();                   // initialize Temp_last including boundary conditions
-	printf("Num threads: %d\n", omp_get_num_threads());
-	printf("Num procs: %d\n", omp_get_num_procs());
-	omp_set_num_threads(omp_get_num_procs());
-	printf("Num threads: %d\n", omp_get_num_threads());
 
     double j_avg = 0, u_avg = 0;
 
@@ -71,35 +67,7 @@ int main(int argc, char *argv[]) {
 
     // do until error is minimal or until max steps
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
-        /*********************************
-         * BLOCK LAPLACE
-        *********************************/
-
-	/*
-        # pragma omp parallel for //private(j)// schedule(runtime)
-        for(i = 1; i <= ROWS-(CHUNK-1); i+=CHUNK) {
-            # pragma omp parallel for //private(j)// schedule(runtime)
-            for(j = 1; j <= COLUMNS-(CHUNK-1); j+=CHUNK) {
-                sim_block(i,j);
-            }
-        }
-
-        dt = 0.0; // reset largest temperature change
-
-        // copy grid to old grid for next iteration and find latest dt
-        //clock_t start1 = clock(), diff1;
-        # pragma omp parallel for reduction(max:dt) private (j) schedule(static)
-        for(i = 1; i <= ROWS; i++){
-            for(j = 1; j <= COLUMNS; j++){
-                dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
-                Temperature_last[i][j] = Temperature[i][j];
-            }
-        }
-	*/
-        /*********************************/
-
         // main calculation: average my four neighbors
-        //clock_t start = clock(), diff;
         # pragma omp parallel for private(j)// schedule(runtime)
         for(i = 1; i <= ROWS; i++) {
             for(j = 1; j <= COLUMNS; j++) {
@@ -111,7 +79,6 @@ int main(int argc, char *argv[]) {
         dt = 0.0; // reset largest temperature change
 
         // copy grid to old grid for next iteration and find latest dt
-        //clock_t start1 = clock(), diff1;
         # pragma omp parallel for reduction(max:dt) private (j) schedule(static)
         for(i = 1; i <= ROWS; i++){
             for(j = 1; j <= COLUMNS; j++){
@@ -148,17 +115,6 @@ int main(int argc, char *argv[]) {
 
 }
 
-void sim_block(int i, int j) {
-    int row_end = i+(CHUNK-1);
-    int col_end = j+(CHUNK-1);
-    int col_start = j;
-    for(; i <= row_end; i++)
-        for (j=col_start; j <= col_end; j++) {
-            Temperature[i][j] = 0.25 * (Temperature_last[i+1][j] + Temperature_last[i-1][j] +
-                                        Temperature_last[i][j+1] + Temperature_last[i][j-1]);
-        }
-}
-
 // initialize plate and boundary conditions
 // Temp_last is used to to start first iteration
 void initialize(){
@@ -187,24 +143,11 @@ void initialize(){
 }
 
 
-// print diagonal in bottom right corner where most action is
 void track_progress(int iteration) {
 
     int i,j;
 
     printf("---------- Iteration number: %d ------------\n", iteration);
-    /*
-    for(i = 0; i <= ROWS; i+= 100) {
-        for (j = 0; j <= COLUMNS; j+=100)
-            printf("%5.2f  ", Temperature[i][i]);
-        printf("| %5.2f \n", Temperature_last[i][1001]);
-    }
-    printf("---------------------------------------------------------------------------\n");
-    for(i = 0; i <= ROWS; i+= 100)
-            printf("%5.2f  ", Temperature_last[1001][i]);
-        printf("\n");
-            //printf("[%d,%d]: %5.2f  ", i, i, Temperature[i][i]);
-    */
     printf("Test point [%d,%d]: %5.2f  ", 250, 900, Temperature[250][900]);
     printf("\n");
 }

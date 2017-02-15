@@ -51,24 +51,20 @@ int main(int argc, char *argv[]) {
     double dt=100;                                       // largest change in t
     struct timeval start_time, stop_time, elapsed_time;  // timers
 
-    int thread_count = omp_get_num_threads();
-
-    printf("Maximum iterations [100-4000]?\n");
+    //printf("Maximum iterations [100-4000]?\n");
     //scanf("%d", &max_iterations);
     max_iterations=10000;
-	//omp_set_nuthreads(4);
 
     initialize();                   // initialize Temp_last including boundary conditions
 
     double j_avg = 0, u_avg = 0;
 
     gettimeofday(&start_time,NULL); // Unix timer
-    double start = omp_get_wtime( );
 
     // do until error is minimal or until max steps
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
         // main calculation: average my four neighbors
-        # pragma omp parallel for private(j)// schedule(runtime)
+        #pragma omp parallel for private(j)// schedule(runtime)
         for(i = 1; i <= ROWS; i++) {
             for(j = 1; j <= COLUMNS; j++) {
                 Temperature[i][j] = 0.25 * (Temperature_last[i+1][j] + Temperature_last[i-1][j] +
@@ -79,7 +75,7 @@ int main(int argc, char *argv[]) {
         dt = 0.0; // reset largest temperature change
 
         // copy grid to old grid for next iteration and find latest dt
-        # pragma omp parallel for reduction(max:dt) private (j) schedule(static)
+        #pragma omp parallel for reduction(max:dt) private (j) schedule(static)
         for(i = 1; i <= ROWS; i++){
             for(j = 1; j <= COLUMNS; j++){
                 dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
@@ -99,17 +95,13 @@ int main(int argc, char *argv[]) {
     }
 
     gettimeofday(&stop_time,NULL);
+    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
-    double end = omp_get_wtime();
-    double etime = end-start;
-
-    double GFLOPS = (double)(iteration-1 )*5.f*ROWS*COLUMNS / (1000000000.f*(end-start));
+    double GFLOPS = (double)(iteration-1 )*5.f*ROWS*COLUMNS / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
     //printf("iters: %d\n", iteration-1);
     printf("GFLOPS: %f\n", GFLOPS);
 
-    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
-
-    printf("T[%d][%d] = %f\n", 250,900,Temperature[250][900]);
+    printf("T[%d][%d] = %f\n", 250,900,Temperature_last[250][900]);
     printf("\nMax error at iteration %d was %f\n", iteration-1, dt);
     printf("Total time was %f seconds.\n", elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0);
 

@@ -50,56 +50,19 @@ int main(int argc, char *argv[]) {
     double dt=100;                                       // largest change in t
     struct timeval start_time, stop_time, elapsed_time;  // timers
 
-    int thread_count = omp_get_num_threads();
-
     //printf("Maximum iterations [100-4000]?\n");
     //scanf("%d", &max_iterations);
     max_iterations=10000;
-	//omp_set_num_threads(1);
 
     initialize();                   // initialize Temp_last including boundary conditions
-	printf("Num threads: %d\n", omp_get_num_threads());
-	printf("Num procs: %d\n", omp_get_num_procs());
-	omp_set_num_threads(omp_get_num_procs());
-	printf("Num threads: %d\n", omp_get_num_threads());
 
     double j_avg = 0, u_avg = 0;
 
     gettimeofday(&start_time,NULL); // Unix timer
-    double start = omp_get_wtime( );
 
     // do until error is minimal or until max steps
 #pragma acc data copy(Temperature_last), create(Temperature)
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
-        /*********************************
-         * BLOCK LAPLACE
-        *********************************/
-
-	/*
-        # pragma omp parallel for //private(j)// schedule(runtime)
-        for(i = 1; i <= ROWS-(CHUNK-1); i+=CHUNK) {
-            # pragma omp parallel for //private(j)// schedule(runtime)
-            for(j = 1; j <= COLUMNS-(CHUNK-1); j+=CHUNK) {
-                sim_block(i,j);
-            }
-        }
-
-        dt = 0.0; // reset largest temperature change
-
-        // copy grid to old grid for next iteration and find latest dt
-        //clock_t start1 = clock(), diff1;
-        # pragma omp parallel for reduction(max:dt) private (j) schedule(static)
-        for(i = 1; i <= ROWS; i++){
-            for(j = 1; j <= COLUMNS; j++){
-                dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
-                Temperature_last[i][j] = Temperature[i][j];
-            }
-        }
-	*/
-        /*********************************/
-
-        // main calculation: average my four neighbors
-        //clock_t start = clock(), diff;
 	#pragma acc kernels
         for(i = 1; i <= ROWS; i++) {
             for(j = 1; j <= COLUMNS; j++) {
@@ -133,15 +96,11 @@ int main(int argc, char *argv[]) {
     }
 
     gettimeofday(&stop_time,NULL);
-
-    double end = omp_get_wtime();
-    double etime = end-start;
+    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
     double GFLOPS = (double)(iteration-1 )*5.f*ROWS*COLUMNS / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
     //printf("iters: %d\n", iteration-1);
     printf("GFLOPS: %f\n", GFLOPS);
-
-    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
     printf("T[%d][%d] = %f\n", 250,900,Temperature[250][900]);
     printf("\nMax error at iteration %d was %f\n", iteration-1, dt);

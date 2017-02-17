@@ -1,3 +1,13 @@
+//---------------------------
+// acc_laplace.c
+// Jay Butera
+//
+// track_progress(..) - Log progress
+// initialize(..) - Initialize the Temperature_last matrix with boundary conditions 
+//
+// Main function runs the laplace simulation until the max change in temperature is lower than
+// a specified threshold.
+//---------------------------
 /*************************************************
  * Laplace Serial C Version
  *
@@ -28,7 +38,6 @@
 // size of plate
 #define COLUMNS    1000
 #define ROWS       1000
-#define CHUNK (ROWS / 10)
 
 // largest permitted change in temp (This value takes about 3400 steps)
 #define MAX_TEMP_ERROR 0.01
@@ -59,9 +68,11 @@ int main(int argc, char *argv[]) {
     double j_avg = 0, u_avg = 0;
 
     gettimeofday(&start_time,NULL); // Unix timer
+    double start = omp_get_wtime( );
 
     // do until error is minimal or until max steps
 #pragma acc data copy(Temperature_last), create(Temperature)
+{
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
 	#pragma acc kernels
         for(i = 1; i <= ROWS; i++) {
@@ -74,7 +85,6 @@ int main(int argc, char *argv[]) {
         dt = 0.0; // reset largest temperature change
 
         // copy grid to old grid for next iteration and find latest dt
-        //clock_t start1 = clock(), diff1;
 	#pragma acc kernels
         for(i = 1; i <= ROWS; i++){
             for(j = 1; j <= COLUMNS; j++){
@@ -85,38 +95,25 @@ int main(int argc, char *argv[]) {
 
         // periodically print test values
         if((iteration % 100) == 0) {
-         track_progress(iteration);
 	 #pragma acc update host(Temperature)
-         printf("dt: %f, T[250][950]: %f\n", dt, Temperature[250][950]);
-         //printf("Jacobi update running avg: %d milliseconds\n", j_avg);
-         //printf("Max and matrix copy running avg: %d milliseconds\n", u_avg);
-        }
+         track_progress(iteration);
+         printf("dt: %f\n", dt);
 
     iteration++;
     }
-
     gettimeofday(&stop_time,NULL);
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
+//#pragma acc update host(Temperature)
+}
+
     double GFLOPS = (double)(iteration-1 )*5.f*ROWS*COLUMNS / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
-    //printf("iters: %d\n", iteration-1);
     printf("GFLOPS: %f\n", GFLOPS);
 
     printf("T[%d][%d] = %f\n", 250,900,Temperature[250][900]);
     printf("\nMax error at iteration %d was %f\n", iteration-1, dt);
     printf("Total time was %f seconds.\n", elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0);
 
-}
-
-void sim_block(int i, int j) {
-    int row_end = i+(CHUNK-1);
-    int col_end = j+(CHUNK-1);
-    int col_start = j;
-    for(; i <= row_end; i++)
-        for (j=col_start; j <= col_end; j++) {
-            Temperature[i][j] = 0.25 * (Temperature_last[i+1][j] + Temperature_last[i-1][j] +
-                                        Temperature_last[i][j+1] + Temperature_last[i][j-1]);
-        }
 }
 
 // initialize plate and boundary conditions
@@ -153,18 +150,6 @@ void track_progress(int iteration) {
     int i,j;
 
     printf("---------- Iteration number: %d ------------\n", iteration);
-    /*
-    for(i = 0; i <= ROWS; i+= 100) {
-        for (j = 0; j <= COLUMNS; j+=100)
-            printf("%5.2f  ", Temperature[i][i]);
-        printf("| %5.2f \n", Temperature_last[i][1001]);
-    }
-    printf("---------------------------------------------------------------------------\n");
-    for(i = 0; i <= ROWS; i+= 100)
-            printf("%5.2f  ", Temperature_last[1001][i]);
-        printf("\n");
-            //printf("[%d,%d]: %5.2f  ", i, i, Temperature[i][i]);
-    */
     printf("Test point [%d,%d]: %5.2f  ", 250, 900, Temperature[250][900]);
     printf("\n");
 }

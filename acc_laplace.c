@@ -8,6 +8,8 @@
 // Main function runs the laplace simulation until the max change in temperature is lower than
 // a specified threshold.
 //---------------------------
+
+
 /*************************************************
  * Laplace Serial C Version
  *
@@ -68,13 +70,12 @@ int main(int argc, char *argv[]) {
     double j_avg = 0, u_avg = 0;
 
     gettimeofday(&start_time,NULL); // Unix timer
-    double start = omp_get_wtime( );
 
     // do until error is minimal or until max steps
 #pragma acc data copy(Temperature_last), create(Temperature)
 {
     while ( dt > MAX_TEMP_ERROR && iteration <= max_iterations ) {
-	#pragma acc kernels
+        #pragma acc kernels
         for(i = 1; i <= ROWS; i++) {
             for(j = 1; j <= COLUMNS; j++) {
                 Temperature[i][j] = 0.25 * (Temperature_last[i+1][j] + Temperature_last[i-1][j] +
@@ -85,7 +86,7 @@ int main(int argc, char *argv[]) {
         dt = 0.0; // reset largest temperature change
 
         // copy grid to old grid for next iteration and find latest dt
-	#pragma acc kernels
+        #pragma acc kernels
         for(i = 1; i <= ROWS; i++){
             for(j = 1; j <= COLUMNS; j++){
                 dt = fmax( fabs(Temperature[i][j]-Temperature_last[i][j]), dt);
@@ -95,9 +96,10 @@ int main(int argc, char *argv[]) {
 
         // periodically print test values
         if((iteration % 100) == 0) {
-	 #pragma acc update host(Temperature)
-         track_progress(iteration);
-         printf("dt: %f\n", dt);
+            #pragma acc update host(Temperature)
+            track_progress(iteration);
+            printf("dt: %f\n", dt);
+        }
 
     iteration++;
     }

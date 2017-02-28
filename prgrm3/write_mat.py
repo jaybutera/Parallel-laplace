@@ -6,6 +6,10 @@ with open('mat', 'wb') as f:
     # Generate random nxn matrix
     A = np.random.rand(n,n)
 
+    # Make diagonal 0
+    for i in range(n):
+        A[i][i] = 0.
+
     # Write file as binary
     A.tofile(f)
 

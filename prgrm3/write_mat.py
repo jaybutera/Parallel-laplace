@@ -4,8 +4,10 @@ n = 10
 
 with open('mat_test', 'wb') as f:
     # Generate random nxn matrix
-    A = np.random.rand(n,n)
+    A = np.empty((n,n))
+    A.fill(99999.)
 
+    '''
     A = np.array([
         [99999.,1.,99999.,99999.,99999.,99999.,99999.,99999.,99999.,99999.],
         [1.,99999.,1.,99999.,99999.,99999.,99999.,99999.,99999.,99999.],
@@ -18,10 +20,16 @@ with open('mat_test', 'wb') as f:
         [99999.,99999.,99999.,99999.,99999.,99999.,99999.,1.,99999.,1.],
         [99999.,99999.,99999.,99999.,99999.,99999.,99999.,99999.,1.,99999.]
         ], np.float64)
+    '''
 
     # Make diagonal 0
     for i in range(n):
         A[i][i] = 0.
+
+    # Make off diag 1
+    for i in range(n-1):
+        A[i+1][i] = 1.
+        A[i][i+1] = 1.
 
     # Write file as binary
     A.tofile(f)

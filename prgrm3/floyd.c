@@ -4,7 +4,7 @@
 #include <omp.h>
 #include <sys/time.h>
 
-#define ROWS 1000
+#define ROWS 2000
 #define COLS ROWS
 
 #define BLOCK_LOW(id,p) (id * ROWS) / p
@@ -43,8 +43,12 @@ void compute_shortest_paths (int id, int p, float** a) {
     int local_rows = (end_row - start_row)+1;
 
     tmp = (float*) malloc (COLS * sizeof(float));
-    //#pragma acc data copy(Astorage), copy(a)
+    //#pragma acc data, copy(a)
     for (k = 0; k < ROWS; k++) {
+        //if (!id) {
+            //clock_t start = clock(), diff;
+        //}
+
         root = BLOCK_OWNER(k,p,ROWS);
 
         if (k == ROWS-1) {
@@ -54,6 +58,7 @@ void compute_shortest_paths (int id, int p, float** a) {
         if (root == id) {
             offset = k - BLOCK_LOW(id,p);
             //printf("root %d with k: %d, low block: %d, offset: %d\n", root, k, BLOCK_LOW(id,p), offset);
+            #pragma omp parallel for
             for (j = 0; j < ROWS; j++)
                 tmp[j] = a[offset][j];
         }
@@ -62,11 +67,18 @@ void compute_shortest_paths (int id, int p, float** a) {
         //fflush(stdout);
 
         MPI_Bcast(tmp, ROWS, MPI_FLOAT, root, MPI_COMM_WORLD);
-        //#pragma omp parallel for private(j)
         //#pragma acc kernels
+        #pragma omp parallel for private(j)
         for (i = 0; i < local_rows; i++)
             for (j = 0; j < ROWS; j++)
                 a[i][j] = MIN(a[i][j], a[i][k]+tmp[j]);
+
+        /*
+        if (!id) {
+            diff = clock() - start;
+            printf("k: %d time: %d\n", k, diff / 1000000);
+        }
+        */
     }
 
     free( tmp );
@@ -88,8 +100,7 @@ int main (int argc, char** argv) {
     int end_row   = ((id+1) * ROWS) / num_procs - 1;
     int local_rows = (end_row - start_row)+1;
 
-    Astorage = (float*) malloc(local_rows * COLS * sizeof(float));
-    if (Astorage == NULL) {
+    Astorage = (float*) malloc(local_rows * COLS * sizeof(float)); if (Astorage == NULL) {
         printf("Astorage mem could not allocate\n");
         exit(0);
     }
@@ -105,7 +116,7 @@ int main (int argc, char** argv) {
         A[i] = &Astorage[i * COLS];
     }
 
-    file_to_mat("mat_test", id, num_procs);
+    file_to_mat("mp_mat", id, num_procs);
 
 
     //-----------

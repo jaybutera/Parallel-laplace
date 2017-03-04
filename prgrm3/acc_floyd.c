@@ -42,24 +42,26 @@ void compute_shortest_paths (int id, int p, float** a) {
     int local_rows = (end_row - start_row)+1;
 
     tmp = (float*) malloc (COLS * sizeof(float));
-    //#pragma acc data, copy(a)
+    #pragma acc data copy(a)
     for (k = 0; k < ROWS; k++) {
         //if (!id) {
             //clock_t start = clock(), diff;
         //}
 
-        root = BLOCK_OWNER(k,p,ROWS);
+        //root = BLOCK_OWNER(k,p,ROWS);
 
+        /*
         if (k == ROWS-1) {
             root = p - 1;
         }
+        */
 
-        if (root == id) {
-            offset = k - BLOCK_LOW(id,p);
+        //if (root == id) {
+            //offset = k - BLOCK_LOW(id,p);
             //printf("root %d with k: %d, low block: %d, offset: %d\n", root, k, BLOCK_LOW(id,p), offset);
-            for (j = 0; j < ROWS; j++)
-                tmp[j] = a[offset][j];
-        }
+            ///for (j = 0; j < ROWS; j++)
+                //tmp[j] = a[k][j];
+        //}
 
         ///printf("%d| k: %d root: %d local_rows: %d\n", id,k, root, local_rows);
         //fflush(stdout);
@@ -67,7 +69,7 @@ void compute_shortest_paths (int id, int p, float** a) {
         #pragma acc kernels
         for (i = 0; i < local_rows; i++)
             for (j = 0; j < ROWS; j++)
-                a[i][j] = MIN(a[i][j], a[i][k]+tmp[j]);
+                a[i][j] = MIN(a[i][j], a[i][k]+a[k][j]);
 
         /*
         if (!id) {
@@ -81,8 +83,8 @@ void compute_shortest_paths (int id, int p, float** a) {
 }
 
 int main (int argc, char** argv) {
-    int id; // Process id
-    int num_procs;
+    int id=0; // Process id
+    int num_procs=1;
 
     // Time record
     struct timeval start_time, stop_time, elapsed_time;
@@ -131,67 +133,14 @@ int main (int argc, char** argv) {
         printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));
         printf("GFLOPS: %f\n", GFLOPS);
 
-    /*
     // Print matrix
-    if (id == num_procs-1) {
-        // Tmp matrix
-        //----------------------------
-        float* Astorage_tmp = (float*) malloc(local_rows * COLS * sizeof(float));
-        if (Astorage_tmp == NULL) {
-            printf("Astorage mem could not allocate\n");
-            exit(0);
-        }
-
-        float** A_tmp = (float**) malloc(local_rows * sizeof(float*));
-        if (A_tmp == NULL) {
-            printf("A mem could not allocate\n");
-            exit(0);
-        }
-
-        int i;
-        for (i = 0; i < local_rows; i++) {
-            A_tmp[i] = &Astorage_tmp[i * COLS];
-        }
-        //----------------------------
-
-        MPI_Status status;
-        for (id = 0; id < num_procs-1; id++) {
-            MPI_Recv(
-                     Astorage_tmp,
-                     (ROWS / num_procs) * COLS,
-                     MPI_FLOAT,
-                     id,
-                     0,
-                     MPI_COMM_WORLD,
-                     &status);
-
-            // Print sub matrix
-            int j;
-            for (i = 0; i < (ROWS / num_procs ); i++) {
-                for (j = 0; j < COLS; j++)
-                    printf("%10.2f ", A_tmp[i][j]);
-                printf("\n");
-            }
-        }
-
-        // Print sub matrix
-        int j;
-        for (i = 0; i < local_rows; i++) {
-            for (j = 0; j < COLS; j++)
-                printf("%10.2f ", A[i][j]);
-            printf("\n");
-        }
-
-        free(Astorage_tmp);
-        free(A_tmp);
-    }
-    else {
-        printf("Send %d elements from proc %d\n", local_rows * COLS, id);
-        MPI_Send(Astorage, local_rows * COLS, MPI_FLOAT, num_procs-1, 0, MPI_COMM_WORLD);
+    /*
+    for (int i = 0; i < ROWS; i++) {
+        for (int j = 0; j < COLS; j++)
+            printf("%10.1f ", A[i][j]);
+        printf("\n");
     }
     */
-
-    //MPI_Barrier(MPI_COMM_WORLD);
 
     // Dealloc
     free(A);

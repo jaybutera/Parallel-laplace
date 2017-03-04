@@ -1,8 +1,8 @@
 import numpy as np
 
-n = 1000
+n = 2000
 
-with open('mat_test', 'wb') as f:
+with open('mp_mat', 'wb') as f:
     A = np.empty((n,n))
     A.fill(99999.)
 

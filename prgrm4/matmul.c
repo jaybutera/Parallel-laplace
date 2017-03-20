@@ -26,7 +26,7 @@ void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm 
     int i_coord = coords[1];
     int j_coord = coords[0];
 
-    int block_size = SIZE * (int)sqrt(p);
+    int block_size = SIZE * (int)sqrt((double)p);
     int start_pos = (i_coord + j_coord) * block_size;
 
     printf("Proc %d reading lines [%d-%d]\n", id, start_row, end_row);
@@ -86,7 +86,7 @@ void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, 
     int i_coord,j_coord;
 
     // Get process coordinates
-    MPI_Cart_coords(grid_comm, id, 2, &coords);
+    MPI_Cart_coords(grid_comm, id, 2, coords);
     i_coord = coords[1]; // Row
     j_coord = coords[0]; // Col
 
@@ -108,6 +108,14 @@ void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, 
 //void matMulAux (float** A,
 
 int main(int argc, char** argv) {
+    int id;
+    int num_procs;
+
+    // Init MPI
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
     //-------------------------
     // Create virtual topology
     //-------------------------
@@ -119,7 +127,7 @@ int main(int argc, char** argv) {
 
     MPI_Comm grid_comm;
 
-    dim_sizes[0] = dim_sizes[1] = SIZE;
+    dim_sizes[0] = dim_sizes[1] = (int)sqrt(num_procs);
     wrap[0] = wrap[1] = 1;
 
     MPI_Cart_create(MPI_COMM_WORLD, 2, dim_sizes,
@@ -151,7 +159,7 @@ int main(int argc, char** argv) {
         A[i] = &Astorage[i * SIZE];
     }
 
-    int* tmp_c = {0,0};
+    int tmp_c[2] = {0,0};
 
     // Read in block from file
     file_to_mat("mp_mat", Astorage, 0, 1, tmp_c, grid_comm);

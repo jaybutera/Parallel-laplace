@@ -5,9 +5,7 @@
 
 #define SIZE 10
 
-#define BLOCK_LOW(id,p) (id * SIZE) / p
-#define BLOCK_OWNER(k,p,n) (((p)*(k+1)-1)/n)
-#define MIN(x,y) (x > y) ? y : x
+#define BLOCK_LEN(p) SIZE * (int)sqrt((double)p)
 
 /*
 typedef struct Matrix {
@@ -26,18 +24,18 @@ void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm 
     int i_coord = coords[1];
     int j_coord = coords[0];
 
-    int block_size = SIZE * (int)sqrt((double)p);
-    int start_pos = (i_coord + j_coord) * block_size;
+    int block_len = BLOCK_LEN(p);//SIZE * (int)sqrt((double)p);
+    int start_pos = (i_coord + j_coord) * block_len;
 
     printf("Proc %d reading lines [%d-%d]\n", id, start_row, end_row);
 
     fseek(f, start_row * SIZE * sizeof(float), SEEK_SET);  // Jump to the end of the file
-    long offset = block_size * sizeof(float);
+    long offset = block_len * sizeof(float);
 
     // Read process block into memory
     int i;
-    for (i = 0; i < block_size; i++) {
-        fread((void*)(&A[block_size*i]), offset, 1, f);
+    for (i = 0; i < block_len; i++) {
+        fread((void*)(&A[block_len*i]), offset, 1, f);
     }
 
     fclose(f);
@@ -140,23 +138,24 @@ int main(int argc, char** argv) {
 
     float** A;
     float* Astorage;
+    int b_len = BLOCK_LEN(num_procs);
 
     // Allocate space
-    Astorage = (float*) malloc(SIZE * SIZE * sizeof(float));
+    Astorage = (float*) malloc(b_len*b_len * sizeof(float));
     if (Astorage == NULL) {
         printf("Astorage mem could not allocate\n");
         exit(0);
     }
 
-    A = (float**) malloc(SIZE * sizeof(float*));
+    A = (float**) malloc(b_len * sizeof(float*));
     if (A == NULL) {
         printf("A mem could not allocate\n");
         exit(0);
     }
 
     int i;
-    for (i = 0; i < SIZE; i++) {
-        A[i] = &Astorage[i * SIZE];
+    for (i = 0; i < b_len; i++) {
+        A[i] = &Astorage[i * b_len];
     }
 
     int tmp_c[2] = {0,0};

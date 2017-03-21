@@ -2,18 +2,40 @@
 #include <stdlib.h>
 #include <math.h>
 #include <mpi.h>
+#include <unistd.h>
+#include "smm.h"
 
 #define SIZE 10
 
 #define BLOCK_LEN(p) SIZE * (int)sqrt((double)p)
 
-/*
-typedef struct Matrix {
-    float** mat;
-    int rows;
-    int cols;
+float** alloc_mat (int size, int p) {
+    float** A;
+    float* Astorage;
+    int b_len = BLOCK_LEN(p);
+
+    // Allocate space
+    Astorage = (float*) malloc(b_len*b_len * sizeof(float));
+    if (Astorage == NULL) {
+        printf("Astorage mem could not allocate\n");
+        exit(0);
+    }
+
+    A = (float**) malloc(b_len * sizeof(float*));
+    if (A == NULL) {
+        printf("A mem could not allocate\n");
+        exit(0);
+    }
+
+    int i;
+    for (i = 0; i < b_len; i++) {
+        A[i] = &Astorage[i * b_len];
+    }
+
+    // TODO: Need to free Astorage
+
+    return A;
 }
-*/
 
 void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm grid_comm) {
     FILE* f = fopen(filename, "rb");
@@ -41,44 +63,6 @@ void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm 
     fclose(f);
 }
 
-/*
-void matMul(float* A, int a_row, int a_col,
-            float* B, int b_row, int b_col,
-            int size, float** C)
-{
-    if (size == 1)
-        C[0][0] = A[0][0] * B[0][0];
-    else {
-        //int new_size = size / 2;
-        int n_a_row = a_row / 2;
-        int n_a_col = a_col / 2;
-        int n_b_row = b_row / 2;
-        int n_b_col = b_col / 2;
-
-        matMul(A, n_a_row, n_a_col/2, B, n_b_row/2, n_b_col/2, C);
-        matMul(A + (n_a_col * sizeof(float)), a_row/2, a_col/2,
-               B + (n_b_rows * sizeof(float)), b_row/2, b_col/2, C);
-    }
-}
-
-void matMul(Matrix* A, Matrix* B, int size, Matrix* C)
-{
-    if (size == 1)
-        C->mat[0][0] = A->mat[A->rows][A->cols] * B->mat[B->rows][B->cols];
-
-    else {
-        int new_size = size / 2;
-
-        A->mat = A->mat[0][0];
-        B->mat = B->mat[0][0];
-        matMul(A, B, new_size, C);
-    }
-}
-
-void matSum (float** A, float** B, float**C, int c_row, int c_col) {
-}
-*/
-
 void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm) {
     int* coords;
     int i_coord,j_coord;
@@ -101,9 +85,6 @@ void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, 
 
     //MPI_sendrecv_replace(
 }
-
-// Auxiliary recursive matrix multiply
-//void matMulAux (float** A,
 
 int main(int argc, char** argv) {
     int id;
@@ -136,43 +117,32 @@ int main(int argc, char** argv) {
 
     //-------------------------
 
-    float** A;
-    float* Astorage;
-    int b_len = BLOCK_LEN(num_procs);
-
-    // Allocate space
-    Astorage = (float*) malloc(b_len*b_len * sizeof(float));
-    if (Astorage == NULL) {
-        printf("Astorage mem could not allocate\n");
-        exit(0);
-    }
-
-    A = (float**) malloc(b_len * sizeof(float*));
-    if (A == NULL) {
-        printf("A mem could not allocate\n");
-        exit(0);
-    }
-
-    int i;
-    for (i = 0; i < b_len; i++) {
-        A[i] = &Astorage[i * b_len];
-    }
+    float** A = alloc_mat(SIZE, num_procs);
+    float** B = alloc_mat(SIZE, num_procs);
+    float** C = alloc_mat(SIZE, num_procs);
 
     int tmp_c[2] = {0,0};
 
     // Read in block from file
-    file_to_mat("mp_mat", Astorage, 0, 1, tmp_c, grid_comm);
+    file_to_mat("mp_mat", A[0], 0, 1, tmp_c, grid_comm);
+    file_to_mat("mp_mat", B[0], 0, 1, tmp_c, grid_comm);
 
-    int j;
-    for (i = 0; i < SIZE; i++) {
-        for (j = 0; j < SIZE; j++) {
+    rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE, A,B,C, SIZE);
+
+    /*
+    int i,j;
+    for (i = 0; i < b_len; i++) {
+        for (j = 0; j < b_len; j++) {
             printf("%f ", A[i][j]);
         }
         printf("\n");
+        fflush(stdout);
     }
+    */
 
     free(A);
-    free(Astorage);
+    free(B);
+    free(C);
 
     return 0;
 }

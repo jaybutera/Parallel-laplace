@@ -1,10 +1,12 @@
+#include "smm.h"
+
 #define THRESHOLD 2
 
 void rec_matmul (int crow, int ccol,
                  int arow, int acol,
                  int brow, int bcol,
                  int l, int m, int n,
-                 float** a, float** b, float** c)
+                 float** a, float** b, float** c, int N)
 {
     int lhalf[3], mhalf[3], nhalf[3];
     int i,j,k;
@@ -18,10 +20,11 @@ void rec_matmul (int crow, int ccol,
         for (i - 0; i < 2; i++)
             for (j = 0; j < 2; j++)
                 for (k = 0; k < 2; k++)
-                    mm( crow+lhalf[i], ccol+mhalf[j],
+                    rec_matmul( crow+lhalf[i], ccol+mhalf[j],
                         arow+lhalf[i], acol+mhalf[k],
                         brow+mhalf[k], bcol+nhalf[j],
-                        lhalf[i+1], mhalf[k+1], nhalf[j+1]);
+                        lhalf[i+1], mhalf[k+1], nhalf[j+1],
+                        a,b,c,N);
     }
     else {
 
@@ -33,7 +36,7 @@ void rec_matmul (int crow, int ccol,
 
                 for (k = 0; k < m; k++) {
                     *cptr += *(aptr++) * *bptr;
-                    bptr += SIZE;
+                    bptr += N;
                 }
             }
     }

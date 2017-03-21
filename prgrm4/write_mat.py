@@ -8,7 +8,7 @@ with open('mp_mat', 'wb') as f:
     # Write file as binary
     A.astype('float32').tofile(f)
 
-    #print A
+    print A
 
 '''
 with open('mat', 'rb') as f:

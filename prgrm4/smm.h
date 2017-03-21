@@ -1,3 +1,4 @@
+#ifndef SMM_H_INCLUDED
 #define SMM_H_INCLUDED
 
 void rec_matmul (int crow, int ccol,
@@ -5,3 +6,5 @@ void rec_matmul (int crow, int ccol,
                  int brow, int bcol,
                  int l, int m, int n,
                  float** a, float** b, float** c, int N);
+
+#endif

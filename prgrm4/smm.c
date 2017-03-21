@@ -1,6 +1,5 @@
 #include "smm.h"
-
-#define THRESHOLD 2
+#include "common.h"
 
 void rec_matmul (int crow, int ccol,
                  int arow, int acol,
@@ -17,7 +16,7 @@ void rec_matmul (int crow, int ccol,
         mhalf[0] = 0; mhalf[1] = m/2; mhalf[1] = m - m/2;
         nhalf[0] = 0; nhalf[1] = n/2; nhalf[1] = n - n/2;
 
-        for (i - 0; i < 2; i++)
+        for (i = 0; i < 2; i++)
             for (j = 0; j < 2; j++)
                 for (k = 0; k < 2; k++)
                     rec_matmul( crow+lhalf[i], ccol+mhalf[j],

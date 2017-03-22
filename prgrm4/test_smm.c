@@ -1,13 +1,15 @@
 #include "smm.h"
 #include <stdio.h>
+#include <malloc.h>
 #include "common.h"
 
 float** alloc_mat (int size) {
     float** A;
     float* Astorage;
 
+    long x = size * size * sizeof(float);
     // Allocate space
-    Astorage = (float*) malloc((long)size*(long)size * (long)sizeof(float));
+    Astorage = malloc(x);
     if (Astorage == NULL) {
         printf("Astorage mem could not allocate\n");
         exit(0);
@@ -29,7 +31,7 @@ float** alloc_mat (int size) {
     return A;
 }
 
-void gen_submats (float** A, float** B, int size, int start_coords[2]) {
+void gen_submats (int size, int start_coords[2]) {
     int i,j;
     for (i = start_coords[0]; i < size; i++)
         for (j = start_coords[1]; j < size; j++) {
@@ -38,7 +40,7 @@ void gen_submats (float** A, float** B, int size, int start_coords[2]) {
         }
 }
 
-void printmat (float** mat, int n) {
+void printmat (float mat[SIZE][SIZE], int n) {
     fflush(stdout);
     int i,j;
     for (i = 0; i < n; i++) {
@@ -49,18 +51,24 @@ void printmat (float** mat, int n) {
 }
 
 int main(int argc, char** argv) {
-    float** A = alloc_mat(SIZE);
-    float** B = alloc_mat(SIZE);
-    float** C = alloc_mat(SIZE);
+    /*
+    A = alloc_mat(SIZE);
+    B = alloc_mat(SIZE);
+    C = alloc_mat(SIZE);
+    */
 
     int coords[2] = {0,0};
-    gen_submats(A,B,SIZE, coords);
+    gen_submats(SIZE, coords);
     printf("A\n-------------\n");
     printmat(A, SIZE);
     printf("B\n-------------\n");
     printmat(B, SIZE);
 
-    rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE,A,B,C,SIZE);
+    printf("AB = C\n-------------\n");
+    rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
+
+    printf("C\n-------------\n");
+    printmat(C, SIZE);
 
     return 0;
 }

@@ -22,8 +22,8 @@ float* my_malloc (int id, int bytes) {
 
 void read_checkerboard_matrix (
         char* s,
-        float*** subs,
-        float** storage,
+        void*** subs,
+        void** storage,
         MPI_Datatype dtype,
         MPI_Comm grid_comm)
 {
@@ -64,9 +64,13 @@ void read_checkerboard_matrix (
     local_rows = BLOCK_SIZE(grid_coord[0], grid_size[0], SIZE);
     local_cols = BLOCK_SIZE(grid_coord[1], grid_size[1], SIZE);
 
+    if (!grid_id) {
+        printf("read submatrix size (%dx%d)\n",local_rows, local_cols);
+    }
+
     *storage = my_malloc(grid_id, local_rows * local_cols * datum_size);
     *subs = (float**) my_malloc(grid_id, local_rows * PTR_SIZE);
-    lptr = (float*) *subs;
+    lptr = (float**) *subs;
     rptr = (float*) *storage;
 
     for (i = 0; i < local_rows; i++) {
@@ -278,6 +282,15 @@ void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, 
     //MPI_sendrecv_replace(
 }
 
+void gen_submats (float** A, float** B, int size, int start_coords[2]) {
+    int i,j;
+    for (i = start_coords[0]; i < size; i++)
+        for (j = start_coords[1]; j < size; j++) {
+            A[i][j] = j-i;
+            B[i][j] = SIZE - j + i;
+        }
+}
+
 int main(int argc, char** argv) {
     int id;
     int num_procs;
@@ -312,23 +325,23 @@ int main(int argc, char** argv) {
 
     //-------------------------
 
-    float** A;
-    float** Astorage;
-    //float** A = alloc_mat(SIZE, num_procs);
-    //float** B = alloc_mat(SIZE, num_procs);
+    float** A = alloc_mat((int)sqrt(SIZE), num_procs);
+    float** B = alloc_mat((int)sqrt(SIZE), num_procs);
     //float** C = alloc_mat(SIZE, num_procs);
 
     // Read in block from file
     //file_to_mat("mp_mat", A[0], id, num_procs, coords, grid_comm);
     //file_to_mat("mp_mat", B[0], id, num_procs, coords, grid_comm);
-    read_checkerboard_matrix("mp_mat", &A, Astorage, MPI_FLOAT, grid_comm);
+    //read_checkerboard_matrix("mp_mat", &A, &Astorage, MPI_FLOAT, grid_comm);
 
     //rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE, A,B,C, SIZE);
+
+    // Generate matrix block for proccess
+    gen_submats(A,B,SIZE,coords);
 
     print_checkerboard_matrix(A, MPI_FLOAT, SIZE, SIZE, grid_comm);
 
     free(A);
-    free(Astorage);
     //free(B);
     //free(C);
 

@@ -8,14 +8,23 @@
 #include "smm.h"
 #include "common.h"
 
-/*
+float* my_malloc (int id, int bytes) {
+    float* buffer;
+
+    if ((buffer = (float*)malloc((size_t) bytes)) == NULL) {
+        printf("Error: Malloc failed for process %d\n", id);
+        fflush(stdout);
+        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
+    }
+
+    return buffer;
+}
+
 void read_checkerboard_matrix (
         char* s,
         float*** subs,
         float** storage,
         MPI_Datatype dtype,
-        int* m,
-        int* n,
         MPI_Comm grid_comm)
 {
     float* buffer;
@@ -35,6 +44,9 @@ void read_checkerboard_matrix (
     int p;
     void* raddr;
 
+    float* rptr;
+    MPI_Status status;
+
     MPI_Comm_rank(grid_comm, &grid_id);
     MPI_Comm_size(grid_comm, &p);
     datum_size = get_size (dtype);
@@ -52,9 +64,52 @@ void read_checkerboard_matrix (
     local_rows = BLOCK_SIZE(grid_coord[0], grid_size[0], SIZE);
     local_cols = BLOCK_SIZE(grid_coord[1], grid_size[1], SIZE);
 
+    *storage = my_malloc(grid_id, local_rows * local_cols * datum_size);
+    *subs = (float**) my_malloc(grid_id, local_rows * PTR_SIZE);
+    lptr = (float*) *subs;
+    rptr = (float*) *storage;
+
+    for (i = 0; i < local_rows; i++) {
+        *(lptr++) = (float*) rptr;
+        rptr += local_rows * datum_size;
+    }
+
+    if (grid_id == 0)
+        buffer = my_malloc(grid_id, SIZE * datum_size);
+
+    for (i = 0; i < grid_size[0]; i++) {
+        coords[0] = i;
+
+        for (j = 0; j < BLOCK_SIZE(i, grid_size[0], SIZE); j++) {
+            if (grid_id == 0)
+                fread(buffer, datum_size, SIZE, infileptr);
+
+            for (k = 0; k < grid_size[1]; k++) {
+                coords[1] = k;
+
+                raddr = buffer + BLOCK_LOW(k, grid_size[1], SIZE) * datum_size;
+
+                MPI_Cart_rank(grid_comm, coords, &dest_id);
+
+                if (grid_id == 0) {
+                    if (dest_id == 0) {
+                        laddr = (*subs)[j];
+                        memcpy (laddr, raddr, local_cols * datum_size);
+                    }
+                    else {
+                        MPI_Send(raddr, BLOCK_SIZE(k, grid_size[1], SIZE), dtype, dest_id, 0, grid_comm);
+                    }
+                }
+                else if (grid_id == dest_id) {
+                    MPI_Recv((*subs)[j], local_cols, dtype, 0, 0, grid_comm, &status);
+                }
+            }
+        }
+    }
+
+    if (grid_id == 0) free (buffer);
 
 }
-*/
 
 int get_size (MPI_Datatype t) {
     if (t == MPI_FLOAT) return sizeof(float);
@@ -67,20 +122,8 @@ void print_subvector(float* a, int n) {
     int i;
 
     for (i = 0; i < n; i++) {
-        printf("6.3f", ((float*)a)[i]);
+        printf("%6.3f", ((float*)a)[i]);
     }
-}
-
-void* my_malloc (int id, int bytes) {
-    void* buffer;
-
-    if ((buffer = malloc((size_t) bytes)) == NULL) {
-        printf("Error: Malloc failed for process %d\n", id);
-        fflush(stdout);
-        MPI_Abort(MPI_COMM_WORLD, MALLOC_ERROR);
-    }
-
-    return buffer;
 }
 
 void print_checkerboard_matrix (
@@ -115,10 +158,14 @@ void print_checkerboard_matrix (
     if (!grid_id)
         buffer = my_malloc (grid_id, n*datum_size);
 
+    // For each row of the process grid
     for (i = 0; i < grid_size[0]; i++) {
         coords[0] = 1;
 
+        // For each matrix row in a process row
         for (j = 0; j < BLOCK_SIZE(i, grid_size[0], m); j++) {
+
+            // Collect the matrix row on process 0 and print it
             if (!grid_id) {
                 for (k = 0; k < grid_size[1]; k++) {
                     coords[1] = k;
@@ -181,6 +228,9 @@ void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm 
 
     int start_row = (id * SIZE) / p;
     int end_row   = ((id+1) * SIZE) / p - 1;
+    //int start_row = (id * SIZE) / (int)sqrt(p);
+    //int start_row = BLOCK_LOW(coords[0], SIZE, 
+    //int end_row = 
 
     int i_coord = coords[1];
     int j_coord = coords[0];
@@ -262,21 +312,25 @@ int main(int argc, char** argv) {
 
     //-------------------------
 
-    float** A = alloc_mat(SIZE, num_procs);
-    float** B = alloc_mat(SIZE, num_procs);
-    float** C = alloc_mat(SIZE, num_procs);
+    float** A;
+    float** Astorage;
+    //float** A = alloc_mat(SIZE, num_procs);
+    //float** B = alloc_mat(SIZE, num_procs);
+    //float** C = alloc_mat(SIZE, num_procs);
 
     // Read in block from file
-    file_to_mat("mp_mat", A[0], id, num_procs, coords, grid_comm);
-    file_to_mat("mp_mat", B[0], id, num_procs, coords, grid_comm);
+    //file_to_mat("mp_mat", A[0], id, num_procs, coords, grid_comm);
+    //file_to_mat("mp_mat", B[0], id, num_procs, coords, grid_comm);
+    read_checkerboard_matrix("mp_mat", &A, Astorage, MPI_FLOAT, grid_comm);
 
-    rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE, A,B,C, SIZE);
+    //rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE, A,B,C, SIZE);
 
     print_checkerboard_matrix(A, MPI_FLOAT, SIZE, SIZE, grid_comm);
 
     free(A);
-    free(B);
-    free(C);
+    free(Astorage);
+    //free(B);
+    //free(C);
 
     return 0;
 }

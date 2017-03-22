@@ -4,6 +4,7 @@
 
 #define SIZE 10
 #define THRESHOLD 2
+#define PTR_SIZE sizeof(float*)
 
 #define MALLOC_ERROR -2
 #define TYPE_ERROR -3

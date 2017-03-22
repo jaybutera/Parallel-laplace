@@ -8,6 +8,54 @@
 #include "smm.h"
 #include "common.h"
 
+/*
+void read_checkerboard_matrix (
+        char* s,
+        float*** subs,
+        float** storage,
+        MPI_Datatype dtype,
+        int* m,
+        int* n,
+        MPI_Comm grid_comm)
+{
+    float* buffer;
+    int coords[2];
+    int datum_size;
+    int dest_id;
+    int grid_coord[2];
+    int grid_id;
+    int grid_period[2];
+    int grid_size[2];
+    int i,j,k;
+    FILE *infileptr;
+    float* laddr;
+    int local_cols;
+    int local_rows;
+    float** lptr;
+    int p;
+    void* raddr;
+
+    MPI_Comm_rank(grid_comm, &grid_id);
+    MPI_Comm_size(grid_comm, &p);
+    datum_size = get_size (dtype);
+
+    if (grid_id == 0) {
+        infileptr = fopen(s, "r");
+        //if (infileptr == NULL) *m = 0;
+        //else {
+        //    fread
+        //}
+    }
+
+    MPI_Cart_get(grid_comm, 2, grid_size, grid_period, grid_coord);
+
+    local_rows = BLOCK_SIZE(grid_coord[0], grid_size[0], SIZE);
+    local_cols = BLOCK_SIZE(grid_coord[1], grid_size[1], SIZE);
+
+
+}
+*/
+
 int get_size (MPI_Datatype t) {
     if (t == MPI_FLOAT) return sizeof(float);
     printf("Error: Unrecognized argument to 'get_size'\n'");
@@ -138,17 +186,20 @@ void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm 
     int j_coord = coords[0];
 
     int block_len = BLOCK_LEN(p);//SIZE * (int)sqrt((float)p);
-    int start_pos = (i_coord + j_coord) * block_len;
+    int start_pos = i_coord * SIZE + j_coord * block_len;
 
     printf("Proc %d reading lines [%d-%d]\n", id, start_row, end_row);
 
-    fseek(f, start_row * SIZE * sizeof(float), SEEK_SET);  // Jump to the end of the file
+    fseek(f, start_pos * sizeof(float), SEEK_SET);  // Jump to the end of the file
     long offset = block_len * sizeof(float);
 
     // Read process block into memory
     int i;
-    for (i = 0; i < block_len; i++) {
+    for (i = 0; i < (int)sqrt((float)p); i++) {
+        // Read row of sub matrix block
         fread((void*)(&A[block_len*i]), offset, 1, f);
+        // Jump to next line
+        fseek(f, SIZE * sizeof(float), SEEK_CUR);
     }
 
     fclose(f);
@@ -194,6 +245,7 @@ int main(int argc, char** argv) {
     int wrap[2];
     int reorder = 1; // Allow MPI to reorder process ranks for optimization
     int grid_id;
+    int coords[2];
 
     MPI_Comm grid_comm;
 
@@ -205,6 +257,8 @@ int main(int argc, char** argv) {
 
     // Get process id in grid communicator
     MPI_Comm_rank(grid_comm, &grid_id);
+    // Get coordinates
+    MPI_Cart_coords(grid_comm, id, 2, coords);
 
     //-------------------------
 
@@ -212,11 +266,9 @@ int main(int argc, char** argv) {
     float** B = alloc_mat(SIZE, num_procs);
     float** C = alloc_mat(SIZE, num_procs);
 
-    int tmp_c[2] = {0,0};
-
     // Read in block from file
-    file_to_mat("mp_mat", A[0], 0, 1, tmp_c, grid_comm);
-    file_to_mat("mp_mat", B[0], 0, 1, tmp_c, grid_comm);
+    file_to_mat("mp_mat", A[0], id, num_procs, coords, grid_comm);
+    file_to_mat("mp_mat", B[0], id, num_procs, coords, grid_comm);
 
     rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE, A,B,C, SIZE);
 

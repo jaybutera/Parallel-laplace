@@ -20,6 +20,7 @@ float* my_malloc (int id, int bytes) {
     return buffer;
 }
 
+/*
 void read_checkerboard_matrix (
         char* s,
         void*** subs,
@@ -114,6 +115,7 @@ void read_checkerboard_matrix (
     if (grid_id == 0) free (buffer);
 
 }
+*/
 
 int get_size (MPI_Datatype t) {
     if (t == MPI_FLOAT) return sizeof(float);
@@ -131,10 +133,10 @@ void print_subvector(float* a, int n) {
 }
 
 void print_checkerboard_matrix (
-        float** a,
+        float a[SIZE][SIZE],
         MPI_Datatype dtype,
-        int m,
-        int n,
+        //int m,
+        //int n,
         MPI_Comm grid_comm)
 {
     void* buffer;
@@ -150,6 +152,7 @@ void print_checkerboard_matrix (
     int local_cols;
     int p;
     int src;
+    int n=SIZE,m=SIZE;
     MPI_Status status;
 
     MPI_Comm_rank(grid_comm, &grid_id);
@@ -199,66 +202,6 @@ void print_checkerboard_matrix (
     }
 }
 
-float** alloc_mat (int size, int p) {
-    float** A;
-    float* Astorage;
-    int b_len = BLOCK_LEN(p);
-
-    // Allocate space
-    Astorage = (float*) malloc(b_len*b_len * sizeof(float));
-    if (Astorage == NULL) {
-        printf("Astorage mem could not allocate\n");
-        exit(0);
-    }
-
-    A = (float**) malloc(b_len * sizeof(float*));
-    if (A == NULL) {
-        printf("A mem could not allocate\n");
-        exit(0);
-    }
-
-    int i;
-    for (i = 0; i < b_len; i++) {
-        A[i] = &Astorage[i * b_len];
-    }
-
-    // TODO: Need to free Astorage
-
-    return A;
-}
-
-void file_to_mat(char* filename, float* A, int id, int p, int* coords, MPI_Comm grid_comm) {
-    FILE* f = fopen(filename, "rb");
-
-    int start_row = (id * SIZE) / p;
-    int end_row   = ((id+1) * SIZE) / p - 1;
-    //int start_row = (id * SIZE) / (int)sqrt(p);
-    //int start_row = BLOCK_LOW(coords[0], SIZE, 
-    //int end_row = 
-
-    int i_coord = coords[1];
-    int j_coord = coords[0];
-
-    int block_len = BLOCK_LEN(p);//SIZE * (int)sqrt((float)p);
-    int start_pos = i_coord * SIZE + j_coord * block_len;
-
-    printf("Proc %d reading lines [%d-%d]\n", id, start_row, end_row);
-
-    fseek(f, start_pos * sizeof(float), SEEK_SET);  // Jump to the end of the file
-    long offset = block_len * sizeof(float);
-
-    // Read process block into memory
-    int i;
-    for (i = 0; i < (int)sqrt((float)p); i++) {
-        // Read row of sub matrix block
-        fread((void*)(&A[block_len*i]), offset, 1, f);
-        // Jump to next line
-        fseek(f, SIZE * sizeof(float), SEEK_CUR);
-    }
-
-    fclose(f);
-}
-
 void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm) {
     int* coords;
     int i_coord,j_coord;
@@ -282,22 +225,23 @@ void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, 
     //MPI_sendrecv_replace(
 }
 
-void gen_submats (float** A, float** B, int size, int start_coords[2]) {
+void gen_submats (int start_coords[2]) {
     int i,j;
-    for (i = start_coords[0]; i < size; i++)
-        for (j = start_coords[1]; j < size; j++) {
+    for (i = start_coords[0]; i < SIZE; i++)
+        for (j = start_coords[1]; j < SIZE; j++) {
             A[i][j] = j-i;
             B[i][j] = SIZE - j + i;
         }
 }
 
 int main(int argc, char** argv) {
-    int id;
+    int global_id;
+    int grid_id;
     int num_procs;
 
     // Init MPI
     MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &id);
+    MPI_Comm_rank(MPI_COMM_WORLD, &global_id);
     MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
     //-------------------------
@@ -307,7 +251,6 @@ int main(int argc, char** argv) {
     int dim_sizes[2];
     int wrap[2];
     int reorder = 1; // Allow MPI to reorder process ranks for optimization
-    int grid_id;
     int coords[2];
 
     MPI_Comm grid_comm;
@@ -321,29 +264,14 @@ int main(int argc, char** argv) {
     // Get process id in grid communicator
     MPI_Comm_rank(grid_comm, &grid_id);
     // Get coordinates
-    MPI_Cart_coords(grid_comm, id, 2, coords);
+    MPI_Cart_coords(grid_comm, grid_id, 2, coords);
 
     //-------------------------
 
-    float** A = alloc_mat((int)sqrt(SIZE), num_procs);
-    float** B = alloc_mat((int)sqrt(SIZE), num_procs);
-    //float** C = alloc_mat(SIZE, num_procs);
-
-    // Read in block from file
-    //file_to_mat("mp_mat", A[0], id, num_procs, coords, grid_comm);
-    //file_to_mat("mp_mat", B[0], id, num_procs, coords, grid_comm);
-    //read_checkerboard_matrix("mp_mat", &A, &Astorage, MPI_FLOAT, grid_comm);
-
-    //rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE, A,B,C, SIZE);
-
     // Generate matrix block for proccess
-    gen_submats(A,B,SIZE,coords);
+    gen_submats(coords);
 
-    print_checkerboard_matrix(A, MPI_FLOAT, SIZE, SIZE, grid_comm);
-
-    free(A);
-    //free(B);
-    //free(C);
+    print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
 
     return 0;
 }

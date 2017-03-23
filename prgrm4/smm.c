@@ -54,7 +54,6 @@ void matmul (int x, int y, int l, int m, int n) {
     int sum = 0;
     int c,d,k;
 
-    #pragma omp parallel for private(d,k)
     for (c = x; c < l+y; c++) {
         for (d = y; d < n+x; d++) {
             for (k = 0; k < m; k++)

@@ -2,9 +2,10 @@
 #define COMMON_INCLUDE_FILE
 // ------------------------
 
-#define SIZE 100
-#define THRESHOLD 4
-#define PTR_SIZE sizeof(float*)
+#define SIZE 30
+#define THRESHOLD 2
+#define DTYPE float
+#define PTR_SIZE sizeof(DTYPE*)
 
 #define MALLOC_ERROR -2
 #define TYPE_ERROR -3
@@ -14,11 +15,11 @@
 #define BLOCK_SIZE(id,p,n) BLOCK_HIGH(id,p,n)-BLOCK_LOW(id,p,n)+1
 #define BLOCK_OWNER(id,p,n) (p*j+1)-1/n
 
-#define BLOCK_LEN(p) SIZE * (int)sqrt((float)p)
+#define BLOCK_LEN(p) SIZE * (int)sqrt((DTYPE)p)
 
-float A[SIZE][SIZE];
-float B[SIZE][SIZE];
-float C[SIZE][SIZE];
+DTYPE A[SIZE][SIZE];
+DTYPE B[SIZE][SIZE];
+DTYPE C[SIZE][SIZE];
 
 // ------------------------
 #endif

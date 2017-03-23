@@ -11,7 +11,7 @@ void rec_matmul (int crow, int ccol,
 {
     int lhalf[3], mhalf[3], nhalf[3];
     int i,j,k;
-    float *aptr, *bptr, *cptr;
+    DTYPE *aptr, *bptr, *cptr;
 
     if (m * n > THRESHOLD) {
         lhalf[0] = 0; lhalf[1] = l/2; lhalf[2] = l - l/2;

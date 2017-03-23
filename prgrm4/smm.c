@@ -21,12 +21,19 @@ void rec_matmul (int crow, int ccol,
         //#pragma omp parallel for private(j,k)
         for (i = 0; i < 2; i++)
             for (j = 0; j < 2; j++)
-                for (k = 0; k < 2; k++)
-                    rec_matmul( crow+lhalf[i], ccol+mhalf[j],
+                for (k = 0; k < 2; k++) {
+                    /*
+                    printf("mm(%d,%d,%d,%d,%d,%d,%d,%d,%d)\n", crow+lhalf[i], ccol+nhalf[j],
+                        arow+lhalf[i], acol+mhalf[k],
+                        brow+mhalf[k], bcol+nhalf[j],
+                        lhalf[i+1], mhalf[k+1], nhalf[j+1]);
+                        */
+                    rec_matmul( crow+lhalf[i], ccol+nhalf[j],
                         arow+lhalf[i], acol+mhalf[k],
                         brow+mhalf[k], bcol+nhalf[j],
                         lhalf[i+1], mhalf[k+1], nhalf[j+1]);
                         //a,b,c,N);
+                }
     }
     else {
         for (i = 0; i < l; i++)
@@ -40,5 +47,21 @@ void rec_matmul (int crow, int ccol,
                     bptr += SIZE;
                 }
             }
+    }
+}
+
+void matmul (int x, int y, int l, int m, int n) {
+    int sum = 0;
+    int c,d,k;
+
+    #pragma omp parallel for private(d,k)
+    for (c = x; c < l+y; c++) {
+        for (d = y; d < n+x; d++) {
+            for (k = 0; k < m; k++)
+                sum = sum + A[c][k]*B[k][d];
+
+            C[c][d] = sum;
+            sum = 0;
+        }
     }
 }

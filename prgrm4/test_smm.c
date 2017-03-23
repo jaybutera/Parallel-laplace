@@ -1,6 +1,5 @@
 #include "smm.h"
 #include <stdio.h>
-#include <malloc.h>
 #include "common.h"
 
 void gen_submats (int size, int start_coords[2]) {
@@ -17,7 +16,7 @@ void printmat (DTYPE mat[SIZE][SIZE], int n) {
     int i,j;
     for (i = 0; i < n; i++) {
         for (j = 0; j < n; j++)
-            printf("%7.0f",mat[i][j]);
+            printf("%6.0f",mat[i][j]);
         putchar('\n');
     }
 }
@@ -48,6 +47,7 @@ int main(int argc, char** argv) {
     */
 
     rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
+    //matmul(0,0,SIZE,SIZE,SIZE);
 
     printf("C\n-------------\n");
     if( verify_result() )
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
         //printf("C[10][10] = %f\n",C[30][30]);
     }
 
-    printmat(C, SIZE);
+    //printmat(C, SIZE);
 
     return 0;
 }

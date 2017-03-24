@@ -128,7 +128,7 @@ void print_subvector(float* a, int n) {
     int i;
 
     for (i = 0; i < n; i++) {
-        printf("%6.3f", ((float*)a)[i]);
+        printf("%3.0f", ((float*)a)[i]);
     }
 }
 
@@ -152,12 +152,13 @@ void print_checkerboard_matrix (
     int local_cols;
     int p;
     int src;
-    int n=SIZE,m=SIZE;
     MPI_Status status;
 
     MPI_Comm_rank(grid_comm, &grid_id);
     MPI_Comm_size(grid_comm, &p);
     datum_size = get_size(dtype);
+
+    int n=SIZE*(int)sqrt(p),m=SIZE*(int)sqrt(p);
 
     MPI_Cart_get (grid_comm, 2, grid_size, grid_period, grid_coords);
     local_cols = BLOCK_SIZE(grid_coords[1], grid_size[1], n);
@@ -167,7 +168,7 @@ void print_checkerboard_matrix (
 
     // For each row of the process grid
     for (i = 0; i < grid_size[0]; i++) {
-        coords[0] = 1;
+        coords[0] = i;
 
         // For each matrix row in a process row
         for (j = 0; j < BLOCK_SIZE(i, grid_size[0], m); j++) {
@@ -202,13 +203,26 @@ void print_checkerboard_matrix (
     }
 }
 
-void init_submats () {
+void init_submats (int coords[2], int p) {
     int i,j;
-    for (i = 0; i < SIZE; i++)
-        for (j = 0; j < SIZE; j++) {
-            A[i][j] = 1.;
-            B[i][j] = 1.;
-            C[i][j] = 0.;
+    int local_i, local_j;
+    // TODO: Pretty sure p needs to be sqrt(p)
+    int i_mat_idx = ((float)coords[0] / sqrt(p)) * (SIZE * (int)sqrt(p));
+    int j_mat_idx = ((float)coords[1] / (int)sqrt(p)) * (SIZE * (int)sqrt(p));
+
+    local_i = 0;
+    local_j = 0;
+    for (i = i_mat_idx; local_i < SIZE; i++, local_i++)
+        for (j = j_mat_idx; local_j < SIZE; j++, local_j++) {
+            if (i == j - 1 || j == i - 1) {
+                A[local_i][local_j] = 1.;
+                B[local_i][local_j] = 1.;
+            }
+            else {
+                A[local_i][local_j] = 0.;
+                B[local_i][local_j] = 0.;
+            }
+            C[local_i][local_j] = 0.;
         }
 }
 
@@ -249,15 +263,34 @@ int main(int argc, char** argv) {
     // Get coordinates
     MPI_Cart_coords(grid_comm, grid_id, 2, coords);
 
+    printf("p %d w/ coords [%d,%d]\n", grid_id, coords[0], coords[1]);
+    fflush(stdout);
+
     //-------------------------
 
     // Generate matrix block for proccess
-    init_submats();
+    init_submats(coords, num_procs);
+
+    if (!global_id)
+        printf("A\n-------\n");
+    print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
+    if (!global_id)
+        printf("-------\n");
 
     // Multiply distributed matrix
     cannon_mult(grid_id, num_procs, grid_comm);
 
-    print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
+    /*
+    if (!global_id) {
+        int i, j;
+        for (i = 0; i < SIZE; i++) {
+            for (j = 0; j < SIZE; j++)
+                printf("%5.0f", C[i][j]);
+            printf("\n");
+        }
+    }
+    */
+    print_checkerboard_matrix(C, MPI_FLOAT, grid_comm);
 
     return 0;
 }
@@ -270,11 +303,14 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     int i_coord = coords[0]; // Row
     int j_coord = coords[1]; // Col
 
-    //int hor_start_id;
-    //int vert_start_id;
     int my_id;
     MPI_Status status;
     int sqrtp = (int)sqrt(p);
+
+    int hor_start_recvr;
+    int hor_start_sender;
+    int vert_start_recvr;
+    int vert_start_sender;
 
     int l_neighbor;
     int r_neighbor;
@@ -287,14 +323,33 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     MPI_Cart_shift(grid_comm, 0, 1, &my_id, &d_neighbor);
 
     // ------------------------
-    // Initial shifts are not necessary when A and B are initialized to 1 hot
-    // matrices
+    // Initial shift
     // ------------------------
 
     // Get rank for process i steps to the left
-    //MPI_Cart_shift(grid_comm, 1, i_coord, &my_id, &hor_start_id);
+    MPI_Cart_shift(grid_comm, 1, -i_coord, &my_id, &hor_start_recvr);
+    MPI_Cart_shift(grid_comm, 1, i_coord, &my_id, &hor_start_sender);
     // Get rank for process j steps to up
-    //MPI_Cart_shift(grid_comm, 0, j_coord, &my_id, &vert_start_id);
+    MPI_Cart_shift(grid_comm, 0, -j_coord, &my_id, &vert_start_recvr);
+    MPI_Cart_shift(grid_comm, 0, j_coord, &my_id, &vert_start_sender);
+
+    // Send A to left, recv from right
+    MPI_Sendrecv(A[0], SIZE*SIZE, MPI_DTYPE, hor_start_recvr, 0,
+                 A[0], SIZE*SIZE, MPI_DTYPE, hor_start_sender, 0,
+                 grid_comm, &status);
+
+    // Send B above, recv from below
+    MPI_Sendrecv(B[0], SIZE*SIZE, MPI_DTYPE, vert_start_recvr, 0,
+                 B[0], SIZE*SIZE, MPI_DTYPE, vert_start_sender, 0,
+                 grid_comm, &status);
+
+    // Multiply matrix blocks
+    rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
+
+
+    // ------------------------
+    // sqrt(p) more times
+    // ------------------------
 
     int i;
     for (i = 0; i < sqrtp-1; i++) {

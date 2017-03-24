@@ -1,5 +1,6 @@
 #include "smm.h"
 #include <stdio.h>
+#include <sys/time.h>
 #include "common.h"
 
 void gen_submats (int size, int start_coords[2]) {
@@ -50,26 +51,35 @@ int main(int argc, char** argv) {
 
     int coords[2] = {0,0};
     gen_submats(SIZE, coords);
+    /*
     printf("A\n-------------\n");
     printmat(A, SIZE);
     printf("B\n-------------\n");
     printmat(B, SIZE);
+    */
+
+    struct timeval start_time, stop_time, elapsed_time;
+
+    //-----------
+    // Start time
+    //-----------
+    gettimeofday(&start_time,NULL);
 
     rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
     //matmul(0,0,SIZE,SIZE,SIZE);
 
-    printf("C\n-------------\n");
-    printmat(C, SIZE);
-    /*
-    if( verify_result() )
-        printf("successful result\n");
-    else {
-        printf("failed test\n");
-        //printf("C[10][10] = %f\n",C[30][30]);
-    }
-    */
+    //---------
+    // End time
+    //---------
+    gettimeofday(&stop_time,NULL);
+    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
+    //printf("C\n-------------\n");
     //printmat(C, SIZE);
+
+    float GFLOPS = (float)(2.f*SIZE*SIZE*SIZE) / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
+    printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));
+    printf("GFLOPS: %f\n", GFLOPS);
 
     return 0;
 }

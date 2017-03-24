@@ -2,8 +2,8 @@
 #define COMMON_INCLUDE_FILE
 // ------------------------
 
-#define SIZE 5
-#define THRESHOLD 2//8388608
+#define SIZE 1024
+#define THRESHOLD 1024//8388608
 #define DTYPE float
 #define MPI_DTYPE MPI_FLOAT
 #define PTR_SIZE sizeof(DTYPE*)

@@ -21,12 +21,6 @@ void rec_matmul (int crow, int ccol,
         for (i = 0; i < 2; i++)
             for (j = 0; j < 2; j++)
                 for (k = 0; k < 2; k++) {
-                    /*
-                    printf("mm(%d,%d,%d,%d,%d,%d,%d,%d,%d)\n", crow+lhalf[i], ccol+nhalf[j],
-                        arow+lhalf[i], acol+mhalf[k],
-                        brow+mhalf[k], bcol+nhalf[j],
-                        lhalf[i+1], mhalf[k+1], nhalf[j+1]);
-                        */
                     rec_matmul( crow+lhalf[i], ccol+nhalf[j],
                         arow+lhalf[i], acol+mhalf[k],
                         brow+mhalf[k], bcol+nhalf[j],
@@ -35,7 +29,14 @@ void rec_matmul (int crow, int ccol,
                 }
     }
     else {
-        for (i = 0; i < l; i++)
+#ifdef USE_OMP
+        #pragma omp parallel shared(A,B,C) private(i,j,k)
+        {
+        //int tid = omp_get_thread_num();
+
+        #pragma omp for schedule(static)
+        for (i = 0; i < l; i++) {
+            //printf("thread %d did row %d\n", tid, i);
             for (j = 0; j < n; j++) {
                 cptr = &C[crow+i][ccol+j];
                 aptr = &A[arow+i][acol];
@@ -46,6 +47,32 @@ void rec_matmul (int crow, int ccol,
                     bptr += SIZE;
                 }
             }
+        }
+        }
+#endif
+
+#ifdef USE_ACC
+
+        #pragma acc data copyin (A[arow:arow+l][acol:acol+m], B[brow:brow+m][bcol:bcol+n], C[crow:crow+l][ccol:ccol+n]) copyout (C[crow:crow+l][ccol:ccol+n])
+        {
+            #pragma acc loop independent
+            for (i = 0; i < l; i++) {
+                //printf("thread %d did row %d\n", tid, i);
+                #pragma acc loop independent
+                for (j = 0; j < n; j++) {
+                    cptr = &C[crow+i][ccol+j];
+                    aptr = &A[arow+i][acol];
+                    bptr = &B[brow][bcol+j];
+
+                    for (k = 0; k < m; k++) {
+                        *cptr += *(aptr++) * *bptr;
+                        bptr += SIZE;
+                    }
+                }
+            }
+        }
+
+#endif
     }
 }
 

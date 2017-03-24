@@ -213,7 +213,7 @@ void init_submats (int coords[2], int p) {
     local_i = 0;
     local_j = 0;
     for (i = i_mat_idx; local_i < SIZE; i++, local_i++)
-        for (j = j_mat_idx; local_j < SIZE; j++, local_j++) {
+        for (j = j_mat_idx, local_j = 0; local_j < SIZE; j++, local_j++) {
             if (i == j - 1 || j == i - 1) {
                 A[local_i][local_j] = 1.;
                 B[local_i][local_j] = 1.;

@@ -3,7 +3,7 @@
 // ------------------------
 
 #define SIZE 30
-#define THRESHOLD 256//8388608
+#define THRESHOLD 8//8388608
 #define DTYPE float
 #define MPI_DTYPE MPI_FLOAT
 #define PTR_SIZE sizeof(DTYPE*)

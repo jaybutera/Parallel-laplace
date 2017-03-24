@@ -202,17 +202,17 @@ void print_checkerboard_matrix (
     }
 }
 
-void init_submats (int start_coords[2]) {
+void init_submats () {
     int i,j;
-    for (i = start_coords[0]; i < SIZE; i++)
-        for (j = start_coords[1]; j < SIZE; j++) {
+    for (i = 0; i < SIZE; i++)
+        for (j = 0; j < SIZE; j++) {
             A[i][j] = 1.;
             B[i][j] = 1.;
             C[i][j] = 0.;
         }
 }
 
-void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm);
+void cannon_mult (int id, int p, MPI_Comm grid_comm);
 
 int main(int argc, char** argv) {
     int global_id;
@@ -235,8 +235,11 @@ int main(int argc, char** argv) {
 
     MPI_Comm grid_comm;
 
-    dim_sizes[0] = dim_sizes[1] = (int)sqrt(num_procs);
-    wrap[0] = wrap[1] = 1;
+    dim_sizes[0] = (int)sqrt(num_procs);
+    dim_sizes[1] = (int)sqrt(num_procs);
+    // Wrap both dimensions
+    wrap[0] = 1;
+    wrap[1] = 1;
 
     MPI_Cart_create(MPI_COMM_WORLD, 2, dim_sizes,
             wrap, reorder, &grid_comm);
@@ -249,27 +252,44 @@ int main(int argc, char** argv) {
     //-------------------------
 
     // Generate matrix block for proccess
-    init_submats(coords);
+    init_submats();
+
+    // Multiply distributed matrix
+    cannon_mult(grid_id, num_procs, grid_comm);
 
     print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
 
     return 0;
 }
 
-void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm) {
+void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     int coords[2];
-    int i_coord,j_coord;
 
     // Get process coordinates
     MPI_Cart_coords(grid_comm, id, 2, coords);
-    i_coord = coords[0]; // Row
-    j_coord = coords[1]; // Col
+    int i_coord = coords[0]; // Row
+    int j_coord = coords[1]; // Col
 
-    int hor_start_id;
-    int vert_start_id;
+    //int hor_start_id;
+    //int vert_start_id;
     int my_id;
     MPI_Status status;
     int sqrtp = (int)sqrt(p);
+
+    int l_neighbor;
+    int r_neighbor;
+    int u_neighbor;
+    int d_neighbor;
+
+    MPI_Cart_shift(grid_comm, 1, -1, &my_id, &l_neighbor);
+    MPI_Cart_shift(grid_comm, 1, 1, &my_id, &r_neighbor);
+    MPI_Cart_shift(grid_comm, 0, -1, &my_id, &u_neighbor);
+    MPI_Cart_shift(grid_comm, 0, 1, &my_id, &d_neighbor);
+
+    // ------------------------
+    // Initial shifts are not necessary when A and B are initialized to 1 hot
+    // matrices
+    // ------------------------
 
     // Get rank for process i steps to the left
     //MPI_Cart_shift(grid_comm, 1, i_coord, &my_id, &hor_start_id);
@@ -279,13 +299,15 @@ void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, 
     int i;
     for (i = 0; i < sqrtp-1; i++) {
         // Send A to left neighbor, recv from right
-        MPI_Sendrecv(A[0], SIZE*SIZE, MPI_DTYPE, (j_coord-1) % sqrtp, 0,
-                     A[0], SIZE*SIZE, MPI_DTYPE, (j_coord+1) % sqrtp, 0,
+        MPI_Sendrecv(A[0], SIZE*SIZE, MPI_DTYPE, l_neighbor, 0,
+                     A[0], SIZE*SIZE, MPI_DTYPE, r_neighbor, 0,
                      grid_comm, &status);
 
+        //if (status.
+
         // Send B to neighbor above, recv from below
-        MPI_Sendrecv(B[0], SIZE*SIZE, MPI_DTYPE, (i_coord-1) % sqrtp, 0,
-                     B[0], SIZE*SIZE, MPI_DTYPE, (i_coord+1) % sqrtp, 0,
+        MPI_Sendrecv(B[0], SIZE*SIZE, MPI_DTYPE, u_neighbor, 0,
+                     B[0], SIZE*SIZE, MPI_DTYPE, d_neighbor, 0,
                      grid_comm, &status);
 
         // Multiply matrix blocks

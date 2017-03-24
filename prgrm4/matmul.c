@@ -202,37 +202,17 @@ void print_checkerboard_matrix (
     }
 }
 
-void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm) {
-    int* coords;
-    int i_coord,j_coord;
-
-    // Get process coordinates
-    MPI_Cart_coords(grid_comm, id, 2, coords);
-    i_coord = coords[1]; // Row
-    j_coord = coords[0]; // Col
-
-    int hor_start_id;
-    int vert_start_id;
-    int my_id;
-
-    // Get rank for process i steps to the left
-    MPI_Cart_shift(grid_comm, 1, i_coord, &my_id, &hor_start_id);
-    // Get rank for process j steps to up
-    MPI_Cart_shift(grid_comm, 0, j_coord, &my_id, &vert_start_id);
-
-    //printf("%d @ [%d,%d]\n", id, coords[1], coords[0]
-
-    //MPI_sendrecv_replace(
-}
-
-void gen_submats (int start_coords[2]) {
+void init_submats (int start_coords[2]) {
     int i,j;
     for (i = start_coords[0]; i < SIZE; i++)
         for (j = start_coords[1]; j < SIZE; j++) {
-            A[i][j] = j-i;
-            B[i][j] = SIZE - j + i;
+            A[i][j] = 1.;
+            B[i][j] = 1.;
+            C[i][j] = 0.;
         }
 }
+
+void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm);
 
 int main(int argc, char** argv) {
     int global_id;
@@ -269,9 +249,47 @@ int main(int argc, char** argv) {
     //-------------------------
 
     // Generate matrix block for proccess
-    gen_submats(coords);
+    init_submats(coords);
 
     print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
 
     return 0;
 }
+
+void cannon_mult (float** A, float** B, float** C, int n, int m, int p, int id, MPI_Comm grid_comm) {
+    int coords[2];
+    int i_coord,j_coord;
+
+    // Get process coordinates
+    MPI_Cart_coords(grid_comm, id, 2, coords);
+    i_coord = coords[0]; // Row
+    j_coord = coords[1]; // Col
+
+    int hor_start_id;
+    int vert_start_id;
+    int my_id;
+    MPI_Status status;
+    int sqrtp = (int)sqrt(p);
+
+    // Get rank for process i steps to the left
+    //MPI_Cart_shift(grid_comm, 1, i_coord, &my_id, &hor_start_id);
+    // Get rank for process j steps to up
+    //MPI_Cart_shift(grid_comm, 0, j_coord, &my_id, &vert_start_id);
+
+    int i;
+    for (i = 0; i < sqrtp-1; i++) {
+        // Send A to left neighbor, recv from right
+        MPI_Sendrecv(A[0], SIZE*SIZE, MPI_DTYPE, (j_coord-1) % sqrtp, 0,
+                     A[0], SIZE*SIZE, MPI_DTYPE, (j_coord+1) % sqrtp, 0,
+                     grid_comm, &status);
+
+        // Send B to neighbor above, recv from below
+        MPI_Sendrecv(B[0], SIZE*SIZE, MPI_DTYPE, (i_coord-1) % sqrtp, 0,
+                     B[0], SIZE*SIZE, MPI_DTYPE, (i_coord+1) % sqrtp, 0,
+                     grid_comm, &status);
+
+        // Multiply matrix blocks
+        rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
+    }
+}
+

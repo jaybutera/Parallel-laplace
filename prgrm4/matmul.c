@@ -208,7 +208,7 @@ void init_submats (int coords[2], int p) {
     int local_i, local_j;
     // TODO: Pretty sure p needs to be sqrt(p)
     int i_mat_idx = ((float)coords[0] / sqrt(p)) * (SIZE * (int)sqrt(p));
-    int j_mat_idx = ((float)coords[1] / (int)sqrt(p)) * (SIZE * (int)sqrt(p));
+    int j_mat_idx = ((float)coords[1] / sqrt(p)) * (SIZE * (int)sqrt(p));
 
     local_i = 0;
     local_j = 0;
@@ -263,8 +263,8 @@ int main(int argc, char** argv) {
     // Get coordinates
     MPI_Cart_coords(grid_comm, grid_id, 2, coords);
 
-    printf("p %d w/ coords [%d,%d]\n", grid_id, coords[0], coords[1]);
-    fflush(stdout);
+    //printf("p %d w/ coords [%d,%d]\n", grid_id, coords[0], coords[1]);
+    //fflush(stdout);
 
     //-------------------------
 

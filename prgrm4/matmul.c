@@ -8,6 +8,12 @@
 #include "smm.h"
 #include "common.h"
 
+// ---------------------
+// FUNCTIONS FROM THE MyMPI LIBRARY
+// FOUND IN APPENDIX B OF
+// PARALLEL PROGRAMMING
+// BY MICHAEL J QUINN
+// ---------------------
 float* my_malloc (int id, int bytes) {
     float* buffer;
 
@@ -19,103 +25,6 @@ float* my_malloc (int id, int bytes) {
 
     return buffer;
 }
-
-/*
-void read_checkerboard_matrix (
-        char* s,
-        void*** subs,
-        void** storage,
-        MPI_Datatype dtype,
-        MPI_Comm grid_comm)
-{
-    float* buffer;
-    int coords[2];
-    int datum_size;
-    int dest_id;
-    int grid_coord[2];
-    int grid_id;
-    int grid_period[2];
-    int grid_size[2];
-    int i,j,k;
-    FILE *infileptr;
-    float* laddr;
-    int local_cols;
-    int local_rows;
-    float** lptr;
-    int p;
-    void* raddr;
-
-    float* rptr;
-    MPI_Status status;
-
-    MPI_Comm_rank(grid_comm, &grid_id);
-    MPI_Comm_size(grid_comm, &p);
-    datum_size = get_size (dtype);
-
-    if (grid_id == 0) {
-        infileptr = fopen(s, "r");
-        //if (infileptr == NULL) *m = 0;
-        //else {
-        //    fread
-        //}
-    }
-
-    MPI_Cart_get(grid_comm, 2, grid_size, grid_period, grid_coord);
-
-    local_rows = BLOCK_SIZE(grid_coord[0], grid_size[0], SIZE);
-    local_cols = BLOCK_SIZE(grid_coord[1], grid_size[1], SIZE);
-
-    if (!grid_id) {
-        printf("read submatrix size (%dx%d)\n",local_rows, local_cols);
-    }
-
-    *storage = my_malloc(grid_id, local_rows * local_cols * datum_size);
-    *subs = (float**) my_malloc(grid_id, local_rows * PTR_SIZE);
-    lptr = (float**) *subs;
-    rptr = (float*) *storage;
-
-    for (i = 0; i < local_rows; i++) {
-        *(lptr++) = (float*) rptr;
-        rptr += local_rows * datum_size;
-    }
-
-    if (grid_id == 0)
-        buffer = my_malloc(grid_id, SIZE * datum_size);
-
-    for (i = 0; i < grid_size[0]; i++) {
-        coords[0] = i;
-
-        for (j = 0; j < BLOCK_SIZE(i, grid_size[0], SIZE); j++) {
-            if (grid_id == 0)
-                fread(buffer, datum_size, SIZE, infileptr);
-
-            for (k = 0; k < grid_size[1]; k++) {
-                coords[1] = k;
-
-                raddr = buffer + BLOCK_LOW(k, grid_size[1], SIZE) * datum_size;
-
-                MPI_Cart_rank(grid_comm, coords, &dest_id);
-
-                if (grid_id == 0) {
-                    if (dest_id == 0) {
-                        laddr = (*subs)[j];
-                        memcpy (laddr, raddr, local_cols * datum_size);
-                    }
-                    else {
-                        MPI_Send(raddr, BLOCK_SIZE(k, grid_size[1], SIZE), dtype, dest_id, 0, grid_comm);
-                    }
-                }
-                else if (grid_id == dest_id) {
-                    MPI_Recv((*subs)[j], local_cols, dtype, 0, 0, grid_comm, &status);
-                }
-            }
-        }
-    }
-
-    if (grid_id == 0) free (buffer);
-
-}
-*/
 
 int get_size (MPI_Datatype t) {
     if (t == MPI_FLOAT) return sizeof(float);
@@ -202,11 +111,20 @@ void print_checkerboard_matrix (
         putchar('\n');
     }
 }
+// ---------------------
 
+// init_submats
+// Jay Butera
+//
+// Description: Initialize matrix block belonging to processor running the
+// program. Values of the block are determined by the processors coordinates
+// on the virtual cartesian grid.
+//
+// coords - I/P - int* - grid coordinates
+// p - I/P - int - number of processors
 void init_submats (int coords[2], int p) {
     int i,j;
     int local_i, local_j;
-    // TODO: Pretty sure p needs to be sqrt(p)
     int i_mat_idx = ((float)coords[0] / sqrt(p)) * (SIZE * (int)sqrt(p));
     int j_mat_idx = ((float)coords[1] / sqrt(p)) * (SIZE * (int)sqrt(p));
 
@@ -226,6 +144,15 @@ void init_submats (int coords[2], int p) {
         }
 }
 
+// cannon_mult
+// Jay Butera
+//
+// Description : Implements cannon's algorithm across multiple nodes
+// utilizing MPI.
+//
+// id - I/P - int - processor rank in the context of grid_comm
+// p - I/P - int - number of processors
+// grid_comm - I/P - MPI_Comm - MPI communicator for virtual caresian grid
 void cannon_mult (int id, int p, MPI_Comm grid_comm);
 
 int main(int argc, char** argv) {
@@ -263,30 +190,11 @@ int main(int argc, char** argv) {
     // Get coordinates
     MPI_Cart_coords(grid_comm, grid_id, 2, coords);
 
-    //printf("p %d w/ coords [%d,%d]\n", grid_id, coords[0], coords[1]);
-    //fflush(stdout);
-    /*
-    if (!global_id)
-        printf("A\n------------------\n");
-    print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
-    if (!global_id)
-        printf("B\n------------------\n");
-    print_checkerboard_matrix(B, MPI_FLOAT, grid_comm);
-    */
-
-    //-------------------------
-
     // Generate matrix block for proccess
     init_submats(coords, num_procs);
 
     // Multiply distributed matrix
     cannon_mult(grid_id, num_procs, grid_comm);
-
-    /*
-    if (!global_id)
-        printf("C\n------------------\n");
-    print_checkerboard_matrix(C, MPI_FLOAT, grid_comm);
-    */
 
     if (!grid_id) {
         int i,j;
@@ -311,19 +219,19 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     MPI_Status status;
     int sqrtp = (int)sqrt(p);
 
+    // Starting shift position ranks
     int hor_start_recvr;
     int hor_start_sender;
     int vert_start_recvr;
     int vert_start_sender;
 
+    // Neighbor ranks
     int l_neighbor;
     int r_neighbor;
     int u_neighbor;
     int d_neighbor;
 
-    //MPI_Cart_shift(grid_comm, 1, -1, &my_id, &l_neighbor);
     MPI_Cart_shift(grid_comm, 1, 1, &l_neighbor, &r_neighbor);
-    //MPI_Cart_shift(grid_comm, 0, -1, &my_id, &u_neighbor);
     MPI_Cart_shift(grid_comm, 0, 1, &u_neighbor, &d_neighbor);
 
     // ------------------------
@@ -331,35 +239,16 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     // ------------------------
 
     // Get rank for process i steps to the left
-    //MPI_Cart_shift(grid_comm, 1, -i_coord, &my_id, &hor_start_recvr); // LEFT
     MPI_Cart_shift(grid_comm, 1, i_coord, &hor_start_recvr, &hor_start_sender); // RIGHT
     // Get rank for process j steps to up
-    //MPI_Cart_shift(grid_comm, 0, -j_coord, &my_id, &vert_start_recvr); // UP
     MPI_Cart_shift(grid_comm, 0, j_coord, &vert_start_recvr, &vert_start_sender); // DOWN
 
     // Send A to left, recv from right
-    /*
-    MPI_Sendrecv(&A[0][0], SIZE*SIZE, MPI_DTYPE, hor_start_recvr, 0,
-                 &A[0][0], SIZE*SIZE, MPI_DTYPE, hor_start_sender, 0,
-                 grid_comm, &status);
-
-    // Send B above, recv from below
-    MPI_Sendrecv(&B[0][0], SIZE*SIZE, MPI_DTYPE, vert_start_recvr, 0,
-                 &B[0][0], SIZE*SIZE, MPI_DTYPE, vert_start_sender, 0,
-                 grid_comm, &status);
-                 */
     MPI_Sendrecv_replace(&(A[0][0]), SIZE*SIZE, MPI_DTYPE, hor_start_recvr, 0, hor_start_sender, 0, grid_comm, &status);
     MPI_Sendrecv_replace(&(B[0][0]), SIZE*SIZE, MPI_DTYPE, vert_start_recvr, 0, vert_start_sender, 0, grid_comm, &status);
 
     // Multiply matrix blocks
     rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
-
-    if (id == 1) {
-        printf("proc 0\n-------\n");
-        printf("l: %d\nr: %d\nu: %d\nd: %d\n",l_neighbor,r_neighbor,u_neighbor,d_neighbor);
-        printf("\nl recvr: %d\nr sender: %d\nu recvr: %d\nd sender: %d\n",hor_start_recvr,hor_start_sender,vert_start_recvr,vert_start_sender);
-    }
-
 
     // ------------------------
     // sqrt(p) more times
@@ -368,18 +257,6 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     int i;
     for (i = 0; i < sqrtp-1; i++) {
         // Send A to left neighbor, recv from right
-        /*
-        MPI_Sendrecv(&A[0][0], SIZE*SIZE, MPI_DTYPE, l_neighbor, 0,
-                     &A[0][0], SIZE*SIZE, MPI_DTYPE, r_neighbor, 0,
-                     grid_comm, &status);
-
-        //if (status.
-
-        // Send B to neighbor above, recv from below
-        MPI_Sendrecv(&B[0][0], SIZE*SIZE, MPI_DTYPE, u_neighbor, 0,
-                     &B[0][0], SIZE*SIZE, MPI_DTYPE, d_neighbor, 0,
-                     grid_comm, &status);
-                     */
         MPI_Sendrecv_replace(&(A[0][0]), SIZE*SIZE, MPI_DTYPE, l_neighbor, 0, r_neighbor, 0, grid_comm, &status);
         MPI_Sendrecv_replace(&(B[0][0]), SIZE*SIZE, MPI_DTYPE, u_neighbor, 0, d_neighbor, 0, grid_comm, &status);
 

@@ -1,3 +1,14 @@
+// --------------------------------------------------
+// matmul.c
+// Jay Butera
+//
+// cannon_mult - cannon matrix multiplication
+// init_submats - initialize block matrices
+// print_checkerboard_matrix - print distributed matrix from all nodes
+// print_subvector - print array of floats
+// my_malloc - allocate dynamic memory of specified size
+// get_size - get the size of an MPI data type
+// --------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>

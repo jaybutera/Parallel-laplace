@@ -1,3 +1,9 @@
+// --------------------------------------------------
+// smm.c
+// Jay Butera
+//
+// rec_matmul - recursive matrix multiplication
+// --------------------------------------------------
 #include "smm.h"
 #include "common.h"
 #include <stdio.h>

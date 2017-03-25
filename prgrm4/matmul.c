@@ -265,32 +265,36 @@ int main(int argc, char** argv) {
 
     //printf("p %d w/ coords [%d,%d]\n", grid_id, coords[0], coords[1]);
     //fflush(stdout);
+    /*
+    if (!global_id)
+        printf("A\n------------------\n");
+    print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
+    if (!global_id)
+        printf("B\n------------------\n");
+    print_checkerboard_matrix(B, MPI_FLOAT, grid_comm);
+    */
 
     //-------------------------
 
     // Generate matrix block for proccess
     init_submats(coords, num_procs);
 
-    if (!global_id)
-        printf("A\n-------\n");
-    print_checkerboard_matrix(A, MPI_FLOAT, grid_comm);
-    if (!global_id)
-        printf("-------\n");
-
     // Multiply distributed matrix
     cannon_mult(grid_id, num_procs, grid_comm);
 
     /*
-    if (!global_id) {
-        int i, j;
-        for (i = 0; i < SIZE; i++) {
-            for (j = 0; j < SIZE; j++)
-                printf("%5.0f", C[i][j]);
-            printf("\n");
-        }
-    }
-    */
+    if (!global_id)
+        printf("C\n------------------\n");
     print_checkerboard_matrix(C, MPI_FLOAT, grid_comm);
+    */
+
+    if (!grid_id) {
+        int i,j;
+        for (i=1; i < SIZE*(int)sqrt(num_procs)-2; i++)
+            for (j=1; j < SIZE*(int)sqrt(num_procs)-2; j++)
+                if (i == j && C[i][j] != 2)
+                    printf("FUCK");
+    }
 
     return 0;
 }
@@ -317,34 +321,44 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     int u_neighbor;
     int d_neighbor;
 
-    MPI_Cart_shift(grid_comm, 1, -1, &my_id, &l_neighbor);
-    MPI_Cart_shift(grid_comm, 1, 1, &my_id, &r_neighbor);
-    MPI_Cart_shift(grid_comm, 0, -1, &my_id, &u_neighbor);
-    MPI_Cart_shift(grid_comm, 0, 1, &my_id, &d_neighbor);
+    //MPI_Cart_shift(grid_comm, 1, -1, &my_id, &l_neighbor);
+    MPI_Cart_shift(grid_comm, 1, 1, &l_neighbor, &r_neighbor);
+    //MPI_Cart_shift(grid_comm, 0, -1, &my_id, &u_neighbor);
+    MPI_Cart_shift(grid_comm, 0, 1, &u_neighbor, &d_neighbor);
 
     // ------------------------
     // Initial shift
     // ------------------------
 
     // Get rank for process i steps to the left
-    MPI_Cart_shift(grid_comm, 1, -i_coord, &my_id, &hor_start_recvr);
-    MPI_Cart_shift(grid_comm, 1, i_coord, &my_id, &hor_start_sender);
+    //MPI_Cart_shift(grid_comm, 1, -i_coord, &my_id, &hor_start_recvr); // LEFT
+    MPI_Cart_shift(grid_comm, 1, i_coord, &hor_start_recvr, &hor_start_sender); // RIGHT
     // Get rank for process j steps to up
-    MPI_Cart_shift(grid_comm, 0, -j_coord, &my_id, &vert_start_recvr);
-    MPI_Cart_shift(grid_comm, 0, j_coord, &my_id, &vert_start_sender);
+    //MPI_Cart_shift(grid_comm, 0, -j_coord, &my_id, &vert_start_recvr); // UP
+    MPI_Cart_shift(grid_comm, 0, j_coord, &vert_start_recvr, &vert_start_sender); // DOWN
 
     // Send A to left, recv from right
-    MPI_Sendrecv(A[0], SIZE*SIZE, MPI_DTYPE, hor_start_recvr, 0,
-                 A[0], SIZE*SIZE, MPI_DTYPE, hor_start_sender, 0,
+    /*
+    MPI_Sendrecv(&A[0][0], SIZE*SIZE, MPI_DTYPE, hor_start_recvr, 0,
+                 &A[0][0], SIZE*SIZE, MPI_DTYPE, hor_start_sender, 0,
                  grid_comm, &status);
 
     // Send B above, recv from below
-    MPI_Sendrecv(B[0], SIZE*SIZE, MPI_DTYPE, vert_start_recvr, 0,
-                 B[0], SIZE*SIZE, MPI_DTYPE, vert_start_sender, 0,
+    MPI_Sendrecv(&B[0][0], SIZE*SIZE, MPI_DTYPE, vert_start_recvr, 0,
+                 &B[0][0], SIZE*SIZE, MPI_DTYPE, vert_start_sender, 0,
                  grid_comm, &status);
+                 */
+    MPI_Sendrecv_replace(&(A[0][0]), SIZE*SIZE, MPI_DTYPE, hor_start_recvr, 0, hor_start_sender, 0, grid_comm, &status);
+    MPI_Sendrecv_replace(&(B[0][0]), SIZE*SIZE, MPI_DTYPE, vert_start_recvr, 0, vert_start_sender, 0, grid_comm, &status);
 
     // Multiply matrix blocks
     rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);
+
+    if (id == 1) {
+        printf("proc 0\n-------\n");
+        printf("l: %d\nr: %d\nu: %d\nd: %d\n",l_neighbor,r_neighbor,u_neighbor,d_neighbor);
+        printf("\nl recvr: %d\nr sender: %d\nu recvr: %d\nd sender: %d\n",hor_start_recvr,hor_start_sender,vert_start_recvr,vert_start_sender);
+    }
 
 
     // ------------------------
@@ -354,16 +368,20 @@ void cannon_mult (int id, int p, MPI_Comm grid_comm) {
     int i;
     for (i = 0; i < sqrtp-1; i++) {
         // Send A to left neighbor, recv from right
-        MPI_Sendrecv(A[0], SIZE*SIZE, MPI_DTYPE, l_neighbor, 0,
-                     A[0], SIZE*SIZE, MPI_DTYPE, r_neighbor, 0,
+        /*
+        MPI_Sendrecv(&A[0][0], SIZE*SIZE, MPI_DTYPE, l_neighbor, 0,
+                     &A[0][0], SIZE*SIZE, MPI_DTYPE, r_neighbor, 0,
                      grid_comm, &status);
 
         //if (status.
 
         // Send B to neighbor above, recv from below
-        MPI_Sendrecv(B[0], SIZE*SIZE, MPI_DTYPE, u_neighbor, 0,
-                     B[0], SIZE*SIZE, MPI_DTYPE, d_neighbor, 0,
+        MPI_Sendrecv(&B[0][0], SIZE*SIZE, MPI_DTYPE, u_neighbor, 0,
+                     &B[0][0], SIZE*SIZE, MPI_DTYPE, d_neighbor, 0,
                      grid_comm, &status);
+                     */
+        MPI_Sendrecv_replace(&(A[0][0]), SIZE*SIZE, MPI_DTYPE, l_neighbor, 0, r_neighbor, 0, grid_comm, &status);
+        MPI_Sendrecv_replace(&(B[0][0]), SIZE*SIZE, MPI_DTYPE, u_neighbor, 0, d_neighbor, 0, grid_comm, &status);
 
         // Multiply matrix blocks
         rec_matmul(0,0,0,0,0,0,SIZE,SIZE,SIZE);

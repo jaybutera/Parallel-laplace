@@ -29,36 +29,24 @@ void rec_matmul (int crow, int ccol,
                 }
     }
     else {
-#ifdef USE_OMP
-        #pragma omp parallel shared(A,B,C) private(i,j,k)
-        {
-        //int tid = omp_get_thread_num();
-
-        #pragma omp for schedule(static)
-        for (i = 0; i < l; i++) {
-            //printf("thread %d did row %d\n", tid, i);
-            for (j = 0; j < n; j++) {
-                cptr = &C[crow+i][ccol+j];
-                aptr = &A[arow+i][acol];
-                bptr = &B[brow][bcol+j];
-
-                for (k = 0; k < m; k++) {
-                    *cptr += *(aptr++) * *bptr;
-                    bptr += SIZE;
-                }
-            }
-        }
-        }
-#endif
-
-#ifdef USE_ACC
-
+#ifdef USE_ACC // OpenACC
         #pragma acc data copyin (A[arow:arow+l][acol:acol+m], B[brow:brow+m][bcol:bcol+n], C[crow:crow+l][ccol:ccol+n]) copyout (C[crow:crow+l][ccol:ccol+n])
+#endif
+#ifdef USE_OMP // OpenMP
+        #pragma omp parallel shared(A,B,C) private(j,k)
+#endif
         {
+#ifdef USE_ACC
             #pragma acc loop independent
+#endif
+#ifdef USE_OMP
+        #pragma omp parallel for schedule(static)
+#endif
             for (i = 0; i < l; i++) {
                 //printf("thread %d did row %d\n", tid, i);
+#ifdef USE_ACC
                 #pragma acc loop independent
+#endif
                 for (j = 0; j < n; j++) {
                     cptr = &C[crow+i][ccol+j];
                     aptr = &A[arow+i][acol];
@@ -71,8 +59,6 @@ void rec_matmul (int crow, int ccol,
                 }
             }
         }
-
-#endif
     }
 }
 

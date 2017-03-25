@@ -2,8 +2,8 @@
 #define COMMON_INCLUDE_FILE
 // ------------------------
 
-#define SIZE 1024
-#define THRESHOLD 1024//8388608
+#define SIZE 4096
+#define THRESHOLD 2048//8388608
 #define DTYPE float
 #define MPI_DTYPE MPI_FLOAT
 #define PTR_SIZE sizeof(DTYPE*)
@@ -18,9 +18,15 @@
 
 #define BLOCK_LEN(p) SIZE * (int)sqrt((DTYPE)p)
 
+/*
 DTYPE A[SIZE][SIZE];
 DTYPE B[SIZE][SIZE];
 DTYPE C[SIZE][SIZE];
+*/
+
+DTYPE** A;//[SIZE][SIZE];
+DTYPE** B;//[SIZE][SIZE];
+DTYPE** C;//[SIZE][SIZE];
 
 // ------------------------
 #endif

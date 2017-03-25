@@ -1,7 +1,32 @@
 #include "smm.h"
 #include <stdio.h>
 #include <sys/time.h>
+#include <malloc.h>
 #include "common.h"
+
+void alloc_mat (float*** A, int size) {
+    float* Astorage;
+
+    // Allocate space
+    Astorage = (float*) malloc(size*size * sizeof(float));
+    if (Astorage == NULL) {
+        printf("Astorage mem could not allocate\n");
+        exit(0);
+    }
+
+    *A = (float**) malloc(size * sizeof(float*));
+    if (A == NULL) {
+        printf("A mem could not allocate\n");
+        exit(0);
+    }
+
+    int i;
+    for (i = 0; i < size; i++) {
+        (*A)[i] = &Astorage[i * size];
+    }
+
+    // TODO: Need to free Astorage
+}
 
 void gen_submats (int size, int start_coords[2]) {
     int i,j;
@@ -23,7 +48,7 @@ void gen_submats (int size, int start_coords[2]) {
         }
 }
 
-void printmat (DTYPE mat[SIZE][SIZE], int n) {
+void printmat (DTYPE** mat, int n) {
     fflush(stdout);
     int i,j;
     for (i = 0; i < n; i++) {
@@ -43,11 +68,9 @@ int verify_result() {
 }
 
 int main(int argc, char** argv) {
-    /*
-    A = alloc_mat(SIZE);
-    B = alloc_mat(SIZE);
-    C = alloc_mat(SIZE);
-    */
+    alloc_mat(&A, SIZE);
+    alloc_mat(&B, SIZE);
+    alloc_mat(&C, SIZE);
 
     int coords[2] = {0,0};
     gen_submats(SIZE, coords);

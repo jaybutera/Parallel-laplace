@@ -15,6 +15,7 @@
 #include <mpi.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "smm.h"
 #include "common.h"
@@ -204,19 +205,29 @@ int main(int argc, char** argv) {
     // Generate matrix block for proccess
     init_submats(coords, num_procs);
 
+    struct timeval start_time, stop_time, elapsed_time;
+
+    //-----------
+    // Start time
+    //-----------
+    gettimeofday(&start_time,NULL);
+
     // Multiply distributed matrix
     cannon_mult(grid_id, num_procs, grid_comm);
 
-    print_checkerboard_matrix(C, MPI_FLOAT, grid_comm);
-    /*
+    //---------
+    // End time
+    //---------
+    gettimeofday(&stop_time,NULL);
+    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
+
+    //print_checkerboard_matrix(C, MPI_FLOAT, grid_comm);
+
     if (!grid_id) {
-        int i,j;
-        for (i=1; i < SIZE*(int)sqrt(num_procs)-2; i++)
-            for (j=1; j < SIZE*(int)sqrt(num_procs)-2; j++)
-                if (i == j && C[i][j] != 2)
-                    printf("FUCK");
+        float GFLOPS = (float)(2.f*SIZE*SIZE*SIZE) / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
+        printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));
+        printf("GFLOPS: %f\n", GFLOPS);
     }
-    */
 
     MPI_Finalize();
 

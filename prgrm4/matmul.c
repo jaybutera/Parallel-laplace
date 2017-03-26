@@ -207,6 +207,8 @@ int main(int argc, char** argv) {
     // Multiply distributed matrix
     cannon_mult(grid_id, num_procs, grid_comm);
 
+    print_checkerboard_matrix(C, MPI_FLOAT, grid_comm);
+    /*
     if (!grid_id) {
         int i,j;
         for (i=1; i < SIZE*(int)sqrt(num_procs)-2; i++)
@@ -214,6 +216,9 @@ int main(int argc, char** argv) {
                 if (i == j && C[i][j] != 2)
                     printf("FUCK");
     }
+    */
+
+    MPI_Finalize();
 
     return 0;
 }

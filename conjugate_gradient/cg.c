@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 
 #define SIZE 2
 
@@ -20,7 +22,7 @@ void mat_vec_mult (float** A, float* x, float* b, int n) {
             b[i] += A[i][j] * x[i];
 }
 
-void conjgrad (float** A, float* b, float* x) {
+void conjgrad (float** A, float* b, float* x, int n) {
     // Allocate space
     float* residual = (float*) malloc( SIZE * sizeof(float) );
     float* dir_vec  = (float*) malloc( SIZE * sizeof(float) );
@@ -32,8 +34,8 @@ void conjgrad (float** A, float* b, float* x) {
     float rsold = inner_prod(residual, residual, n);
     int i;
     for (i = 0; i < n; i++) {
-        mat_vec_mult(A, dir_vec, Ap);
-        alpha = rsold / inner_prod(dir_vec, Ap);
+        mat_vec_mult(A, dir_vec, Ap, n);
+        alpha = rsold / inner_prod(dir_vec, Ap, n);
 
         // Update x
         int j;
@@ -44,9 +46,9 @@ void conjgrad (float** A, float* b, float* x) {
         for (j = 0; j < n; j++)
             residual[j] -= alpha * dir_vec[j];
 
-        rsnew = inner_prod(residual, residual);
+        rsnew = inner_prod(residual, residual, n);
 
-        if (math.sqrt(rsnew) < .001) break;
+        if (sqrt(rsnew) < .001) break;
 
         // Update direction vector
         for (j = 0; j < n; j++)
@@ -60,7 +62,38 @@ void conjgrad (float** A, float* b, float* x) {
     free(residual);
 }
 
-int main(int argc, char* argv) {
+void initA (float** A, int n) {
+    float counter = 0;
+    int i,j;
+    for (i = 0; i < n; i++)
+        for (j = 0; j < n; j++)
+            A[i][j] = counter++;
+}
+
+void printA (float** A, int n) {
+    int i,j;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++)
+            printf("%6.3f", A[i][j]);
+        printf("");
+    }
+    printf("\n");
+}
+
+void initb (float* b, int n) {
+    int i,j;
+    for (i = 0; i < n; i++)
+        b[i] = i;
+}
+
+void printb (float* b, int n) {
+    int i,j;
+    for (i = 0; i < n; i++)
+        printf("%6.3f", b[i]);
+    printf("\n");
+}
+
+int main(int argc, char** argv) {
     // Assume matrix A is [sizexsize]
 
     // Init matrix A
@@ -72,31 +105,41 @@ int main(int argc, char* argv) {
     }
 
     float** A = (float**) malloc(SIZE * sizeof(float*));
-    float** A = malloc (SIZE * sizeof(float*) );
     if (A == NULL) {
         printf("A mem could not allocate\n");
         exit(0);
     }
+    initA(A,SIZE);
 
     int i;
     for (i=0; i < SIZE; i++)
-        A[i] = Astorage[i * SIZE];
+        A[i] = &Astorage[i * SIZE];
     // -------------
 
     // Init vector b
     // -------------
-    float* b = (float**) malloc(SIZE * sizeof(float*));
+    float* b = (float*) malloc(SIZE * sizeof(float*));
     if (b == NULL) {
         printf("A mem could not allocate\n");
         exit(0);
     }
+    initb(b,SIZE);
     // -------------
 
 
     // Allocate x
     float* x = (float*) malloc (SIZE * sizeof(float));
 
+    printA(A, SIZE);
+    printb(b, SIZE);
+
     // Compute conjugate gradient
-    conjgrad(A, b, x);
+    conjgrad(A, b, x, SIZE);
+
+    free(Astorage);
+    free(A);
+    free(b);
+    free(x);
+
     return 0;
 }

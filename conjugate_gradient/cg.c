@@ -39,17 +39,17 @@ void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
 }
 
 void initA (dtype** A, int n) {
-    /*
     dtype counter = 0;
     int i,j;
     for (i = 0; i < n; i++)
         for (j = 0; j < n; j++)
             A[i][j] = counter++;
-    */
+    /*
     A[0][0] = 4;
     A[0][1] = 1;
     A[1][0] = 1;
     A[1][1] = 3;
+    */
 }
 
 void printA (dtype** A, int n) {
@@ -93,48 +93,35 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
         // Residual is the initial search direction
         dir_vec[i] = residual[i];
     }
-    //printf("residual\n----------\n");
-    //printb(dir_vec,n);
 
     dtype rsold = inner_prod(residual, residual, n);
 
     int j;
-    //printf("residuals\n------------\n");
-    for (i = 0; i < n; i++) {
+    printf("\nresiduals\n------------\n");
+    for (i = 0; i < n+3; i++) {
         mat_vec_mult(A, dir_vec, Ap, n);
-        //printf("Ap\n-----------\n");
-        //printb(Ap, n);
-
-        //printf("---\np * Ap: %f\n", inner_prod(dir_vec, Ap, n));
 
         alpha = rsold / inner_prod(dir_vec, Ap, n);
-        //printf("\nalpha: %f\n", alpha);
 
         // Update x
         for (j = 0; j < n; j++)
             x[j] += alpha * dir_vec[j];
-        //printf("\nnew x:\n");
-        //printb(x,n);
 
         // Update residual
         for (j = 0; j < n; j++)
             residual[j] -= alpha * Ap[j];
-        //printf("residual\n----------\n");
-        //printb(residual,n);
 
         rsnew = inner_prod(residual, residual, n);
         printf("%f\n", sqrt(rsnew));
 
         if (sqrt(rsnew) < .000001) {
-            printf("MINIMAL ERROR, EXIT\n");
+            printf("\n[+] MINIMAL ERROR, EXIT ITERATION %d\n",i);
             break;
         }
 
         // Update direction vector
         for (j = 0; j < n; j++)
             dir_vec[j] = residual[j] + (rsnew/rsold) * dir_vec[j];
-        //printf("\ndir vec\n----------\n");
-        //printb(dir_vec,n);
 
         rsold = rsnew;
     }
@@ -190,8 +177,10 @@ int main(int argc, char** argv) {
     }
     for (i = 0; i < SIZE; i++)
         x[i] = 0;
+    /*
     x[0] = 2;
     x[1] = 1;
+    */
     // -------------
 
     printf("A\n---------\n");

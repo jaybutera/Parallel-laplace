@@ -4,7 +4,7 @@
 
 #define dtype double
 
-#define SIZE 2
+#define SIZE 10
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     dtype prod = 0;
@@ -26,13 +26,9 @@ void printb (dtype* b, int n) {
 
 void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     int i,j;
-    //printf("b\n---------\n");
     for (i = 0; i < n; i++) {
         b[i] = 0;
-        //printb(b,n);
-        //printf("\n---------\n");
         for (j = 0; j < n; j++) {
-            //printf("b[%d] (%f) += A[%d][%d] (%f) * x[%d] (%f)\n",i,b[i],i,j,A[i][j],j,x[j]);
             b[i] += A[i][j] * x[j];
         }
     }
@@ -98,7 +94,7 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
 
     int j;
     printf("\nresiduals\n------------\n");
-    for (i = 0; i < n+3; i++) {
+    for (i = 0; ; i++) {
         mat_vec_mult(A, dir_vec, Ap, n);
 
         alpha = rsold / inner_prod(dir_vec, Ap, n);

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <omp.h>
+#include <sys/time.h>
 
 #define dtype double
 
@@ -26,6 +28,7 @@ void printb (dtype* b, int n) {
 
 void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     int i,j;
+    #pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
         b[i] = 0;
         for (j = 0; j < n; j++) {
@@ -108,7 +111,9 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
             residual[j] -= alpha * Ap[j];
 
         rsnew = inner_prod(residual, residual, n);
-        printf("%f\n", sqrt(rsnew));
+
+        // Print residual error
+        // printf("%f\n", sqrt(rsnew));
 
         if (sqrt(rsnew) < .000001) {
             printf("\n[+] MINIMAL ERROR, EXIT ITERATION %d\n",i);
@@ -173,21 +178,40 @@ int main(int argc, char** argv) {
     }
     for (i = 0; i < SIZE; i++)
         x[i] = 0;
-    /*
-    x[0] = 2;
-    x[1] = 1;
-    */
     // -------------
+
+    // Time record
+    struct timeval start_time, stop_time, elapsed_time;
 
     printf("A\n---------\n");
     printA(A, SIZE);
     printf("B\n---------\n");
     printb(b, SIZE);
 
+    //-----------
+    // Start time
+    //-----------
+    gettimeofday(&start_time,NULL);
+
     // Compute conjugate gradient
     conjgrad(A, b, x, SIZE);
     printf("\nx\n---------\n");
     printb(x,SIZE);
+
+    //---------
+    // End time
+    //---------
+    gettimeofday(&stop_time,NULL);
+    timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
+
+    // 2N^3/T
+    //if (!id) {
+        //float GFLOPS = (float)(2.f*ROWS*ROWS*ROWS) / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
+
+        printf("\n--------------------------------\n");
+        printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));
+        //printf("GFLOPS: %f\n", GFLOPS);
+    //}
 
     free(Astorage);
     free(A);

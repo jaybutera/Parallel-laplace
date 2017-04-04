@@ -6,7 +6,7 @@
 
 #define dtype double
 
-#define SIZE 8
+#define SIZE 15
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     dtype prod = 0;
@@ -46,14 +46,15 @@ void initA (dtype** A, int n) {
     int i,j,k;
     for (i = 0; i < n; i++) {
         for (j = 0; j < n; j++) {
-            if (i == j) { // Make diagonal dominant
-                A[i][j] = 1;
-                for (k = 0; k < n; k++)
-                    A[i][j] += abs(A[i][k]);
-            }
-            else // Non diag. is random
-                A[i][j] = randDtype();
+            A[i][j] = randDtype();
         }
+    }
+
+    // Make diagonal dominant
+    for (i = 0; i < n; i++) {
+        A[i][i] = 1;
+        for (k = 0; k < n; k++)
+            A[i][i] += A[i][k];
     }
 }
 
@@ -70,13 +71,14 @@ void printA (dtype** A, int n) {
 void initb (dtype** A, dtype* b, int n) {
     dtype* tmp_x = (dtype*) malloc( SIZE * sizeof(dtype) );
 
-    printf("Original x\n-----------------\n");
+    //printf("Original x: \n");
     int i;
     for (i = 0; i < n; i++) {
         tmp_x[i] = randDtype();
-        printf("%6.3f", tmp_x[i]);
+        //printf("%6.3f", tmp_x[i]);
     }
-    printf("\n");
+    //printf("\n");
+    //printf("Original x[0]: %6.3f\n", tmp_x[0]);
 
     // Compute b from random x
     mat_vec_mult(A, tmp_x, b, n);
@@ -170,6 +172,7 @@ int main(int argc, char** argv) {
         A[i] = &Astorage[i * SIZE];
 
     initA(A,SIZE);
+    //printA(A,SIZE);
     // -------------
 
     // Init vector b
@@ -220,8 +223,9 @@ int main(int argc, char** argv) {
     gettimeofday(&stop_time,NULL);
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
 
-    printf("\nFinal x\n--------------\n");
-    printb(x,SIZE);
+    //printf("\nFinal x[0]: %6.3f\n", x[0]);
+    //printf("\nFinal x\n--------------\n");
+    //printb(x,SIZE);
 
     // 2N^3/T
     //if (!id) {

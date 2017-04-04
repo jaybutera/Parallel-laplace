@@ -6,7 +6,7 @@
 
 #define dtype double
 
-#define SIZE 10
+#define SIZE 8
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     dtype prod = 0;
@@ -28,7 +28,7 @@ void printb (dtype* b, int n) {
 
 void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     int i,j;
-    #pragma omp parallel for private(j)
+    //#pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
         b[i] = 0;
         for (j = 0; j < n; j++) {
@@ -37,18 +37,24 @@ void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     }
 }
 
+dtype randDtype () {
+    return (dtype)rand() / (dtype)RAND_MAX;
+}
+
 void initA (dtype** A, int n) {
-    dtype counter = 0;
-    int i,j;
-    for (i = 0; i < n; i++)
-        for (j = 0; j < n; j++)
-            A[i][j] = counter++;
-    /*
-    A[0][0] = 4;
-    A[0][1] = 1;
-    A[1][0] = 1;
-    A[1][1] = 3;
-    */
+    //dtype counter = 0;
+    int i,j,k;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) {
+            if (i == j) { // Make diagonal dominant
+                A[i][j] = 1;
+                for (k = 0; k < n; k++)
+                    A[i][j] += abs(A[i][k]);
+            }
+            else // Non diag. is random
+                A[i][j] = randDtype();
+        }
+    }
 }
 
 void printA (dtype** A, int n) {
@@ -61,10 +67,19 @@ void printA (dtype** A, int n) {
     printf("\n");
 }
 
-void initb (dtype* b, int n) {
-    int i,j;
-    for (i = 0; i < n; i++)
-        b[i] = i+1;
+void initb (dtype** A, dtype* b, int n) {
+    dtype* tmp_x = (dtype*) malloc( SIZE * sizeof(dtype) );
+
+    printf("Original x\n-----------------\n");
+    int i;
+    for (i = 0; i < n; i++) {
+        tmp_x[i] = randDtype();
+        printf("%6.3f", tmp_x[i]);
+    }
+    printf("\n");
+
+    // Compute b from random x
+    mat_vec_mult(A, tmp_x, b, n);
 }
 
 void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
@@ -97,7 +112,7 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
 
     int j;
     printf("\nresiduals\n------------\n");
-    for (i = 0; ; i++) {
+    for (i = 0; i<n; i++) {
         mat_vec_mult(A, dir_vec, Ap, n);
 
         alpha = rsold / inner_prod(dir_vec, Ap, n);
@@ -113,7 +128,7 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
         rsnew = inner_prod(residual, residual, n);
 
         // Print residual error
-        // printf("%f\n", sqrt(rsnew));
+        printf("%f\n", sqrt(rsnew));
 
         if (sqrt(rsnew) < .000001) {
             printf("\n[+] MINIMAL ERROR, EXIT ITERATION %d\n",i);
@@ -134,6 +149,7 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
 
 int main(int argc, char** argv) {
     // Assume matrix A is [sizexsize]
+    srand( time(NULL) );
 
     // Init matrix A
     // -------------
@@ -153,7 +169,6 @@ int main(int argc, char** argv) {
     for (i=0; i < SIZE; i++)
         A[i] = &Astorage[i * SIZE];
 
-    printf("Init A\n");
     initA(A,SIZE);
     // -------------
 
@@ -164,8 +179,7 @@ int main(int argc, char** argv) {
         printf("A mem could not allocate\n");
         exit(0);
     }
-    printf("Init b\n");
-    initb(b,SIZE);
+    initb(A,b,SIZE);
     // -------------
 
 
@@ -183,10 +197,12 @@ int main(int argc, char** argv) {
     // Time record
     struct timeval start_time, stop_time, elapsed_time;
 
+    /*
     printf("A\n---------\n");
     printA(A, SIZE);
     printf("B\n---------\n");
     printb(b, SIZE);
+    */
 
     //-----------
     // Start time
@@ -195,14 +211,17 @@ int main(int argc, char** argv) {
 
     // Compute conjugate gradient
     conjgrad(A, b, x, SIZE);
-    printf("\nx\n---------\n");
-    printb(x,SIZE);
+    //printf("\nx\n---------\n");
+    //printb(x,SIZE);
 
     //---------
     // End time
     //---------
     gettimeofday(&stop_time,NULL);
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
+
+    printf("\nFinal x\n--------------\n");
+    printb(x,SIZE);
 
     // 2N^3/T
     //if (!id) {

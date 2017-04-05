@@ -6,13 +6,15 @@
 
 #define dtype float
 
-#define SIZE 2048
+#define SIZE 10
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     // 2*N FLOP
     dtype prod = 0;
 
     int i;
+    #pragma omp parallel for
+    //#pragma acc kernels
     for (i = 0; i < n; i++) {
         prod += a[i] * b[i];
     }
@@ -31,8 +33,10 @@ void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     // 2*N^2 FLOP
     int i,j;
     #pragma omp parallel for private(j)
+    //#pragma acc kernels
     for (i = 0; i < n; i++) {
         b[i] = 0;
+        //#pragma acc kernels
         for (j = 0; j < n; j++) {
             b[i] += A[i][j] * x[j];
         }
@@ -43,16 +47,21 @@ dtype randDtype () {
     return (dtype)rand() / (dtype)RAND_MAX;
 }
 
-void initA (dtype** A, int n) {
+void initA (dtype** A, int band, int n) {
     //dtype counter = 0;
     int i,j,k;
+    #pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
         for (j = 0; j < n; j++) {
-            A[i][j] = randDtype();
+            if ( abs(i-j) > band ) // Outside the band are 0s
+                A[i][j] = 0;
+            else
+                A[i][j] = randDtype();
         }
     }
 
     // Make diagonal dominant
+    #pragma omp parallel for private(k)
     for (i = 0; i < n; i++) {
         A[i][i] = 1;
         for (k = 0; k < n; k++)
@@ -177,7 +186,8 @@ int main(int argc, char** argv) {
     for (i=0; i < SIZE; i++)
         A[i] = &Astorage[i * SIZE];
 
-    initA(A,SIZE);
+    int bandsize = 2; // Init matrix w/ semibandwith of bandsize
+    initA(A,bandsize,SIZE);
     //printA(A,SIZE);
     // -------------
 
@@ -238,7 +248,6 @@ int main(int argc, char** argv) {
         float GFLOPS = (float)((2.f*SIZE*SIZE + 3.f*SIZE) +
                        (float)(iters * 2.f*(SIZE*SIZE + 5.f*SIZE))) /
                        (float)(1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
-            //(float)(2.f*ROWS*ROWS*ROWS) / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
 
         printf("\n--------------------------------\n");
         printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));

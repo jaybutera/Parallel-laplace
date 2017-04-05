@@ -4,11 +4,12 @@
 #include <omp.h>
 #include <sys/time.h>
 
-#define dtype double
+#define dtype float
 
-#define SIZE 15
+#define SIZE 2048
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
+    // 2*N FLOP
     dtype prod = 0;
 
     int i;
@@ -27,8 +28,9 @@ void printb (dtype* b, int n) {
 }
 
 void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
+    // 2*N^2 FLOP
     int i,j;
-    //#pragma omp parallel for private(j)
+    #pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
         b[i] = 0;
         for (j = 0; j < n; j++) {
@@ -84,7 +86,7 @@ void initb (dtype** A, dtype* b, int n) {
     mat_vec_mult(A, tmp_x, b, n);
 }
 
-void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
+int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
     int i;
     // Allocate space
     dtype* residual = (dtype*) malloc( SIZE * sizeof(dtype) );
@@ -113,7 +115,7 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
     dtype rsold = inner_prod(residual, residual, n);
 
     int j;
-    printf("\nresiduals\n------------\n");
+    //printf("\nresiduals\n------------\n");
     for (i = 0; i<n; i++) {
         mat_vec_mult(A, dir_vec, Ap, n);
 
@@ -130,7 +132,7 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
         rsnew = inner_prod(residual, residual, n);
 
         // Print residual error
-        printf("%f\n", sqrt(rsnew));
+        //printf("%f\n", sqrt(rsnew));
 
         if (sqrt(rsnew) < .000001) {
             printf("\n[+] MINIMAL ERROR, EXIT ITERATION %d\n",i);
@@ -144,9 +146,13 @@ void conjgrad (dtype** A, dtype* b, dtype* x, int n) {
         rsold = rsnew;
     }
 
+    printf("Final residual: %f\n", sqrt(rsnew));
+
     free(Ap);
     free(dir_vec);
     free(residual);
+
+    return i;
 }
 
 int main(int argc, char** argv) {
@@ -213,7 +219,7 @@ int main(int argc, char** argv) {
     gettimeofday(&start_time,NULL);
 
     // Compute conjugate gradient
-    conjgrad(A, b, x, SIZE);
+    int iters = conjgrad(A, b, x, SIZE);
     //printf("\nx\n---------\n");
     //printb(x,SIZE);
 
@@ -229,11 +235,14 @@ int main(int argc, char** argv) {
 
     // 2N^3/T
     //if (!id) {
-        //float GFLOPS = (float)(2.f*ROWS*ROWS*ROWS) / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
+        float GFLOPS = (float)((2.f*SIZE*SIZE + 3.f*SIZE) +
+                       (float)(iters * 2.f*(SIZE*SIZE + 5.f*SIZE))) /
+                       (float)(1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
+            //(float)(2.f*ROWS*ROWS*ROWS) / (1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
 
         printf("\n--------------------------------\n");
         printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));
-        //printf("GFLOPS: %f\n", GFLOPS);
+        printf("GFLOPS: %f\n", GFLOPS);
     //}
 
     free(Astorage);

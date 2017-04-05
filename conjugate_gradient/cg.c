@@ -29,7 +29,7 @@ void printb (dtype* b, int n) {
     printf("\n");
 }
 
-void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
+void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n, int m) {
     // 2*N^2 FLOP
     int i,j;
     #pragma omp parallel for private(j)
@@ -37,7 +37,7 @@ void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     for (i = 0; i < n; i++) {
         b[i] = 0;
         //#pragma acc kernels
-        for (j = 0; j < n; j++) {
+        for (j = 0; j < m; j++) {
             b[i] += A[i][j] * x[j];
         }
     }
@@ -50,41 +50,54 @@ dtype randDtype () {
 void initA (dtype** A, int band, int n) {
     //dtype counter = 0;
     int i,j,k;
+    int m = 2*band+1; // Num columns
+
     #pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
-        for (j = 0; j < n; j++) {
-            if ( abs(i-j) > band ) // Outside the band are 0s
-                A[i][j] = 0;
-            else
-                A[i][j] = randDtype();
+        for (j = 0; j < m; j++) {
+            A[i][j] = randDtype();
         }
     }
+
+    // Insert 0s at edge case
+    for (i = 0; i < band+1; i++)
+        for (j = band+(i+1); j < m; j++) {
+            printf("A[%d][%d] = 0\n",i,j);
+            A[i][j] = 0;
+        }
+    for (i = n-1; i > n-(band+1); i--)
+        for (j = m-(band+(n-i)); j >= 0; j--) {
+            printf("A[%d][%d] = 0\n",i,j);
+            A[i][j] = 0;
+         }
+
 
     // Make diagonal dominant
     #pragma omp parallel for private(k)
     for (i = 0; i < n; i++) {
-        A[i][i] = 1;
-        for (k = 0; k < n; k++)
-            A[i][i] += A[i][k];
+        A[i][band] = 1;
+        for (k = 0; k < m; k++)
+            if (k != band)
+                A[i][band] += A[i][k];
     }
 }
 
-void printA (dtype** A, int n) {
+void printA (dtype** A, int n, int m) {
     int i,j;
     for (i = 0; i < n; i++) {
-        for (j = 0; j < n; j++)
+        for (j = 0; j < m; j++)
             printf("%8.3f", A[i][j]);
         printf("\n");
     }
     printf("\n");
 }
 
-void initb (dtype** A, dtype* b, int n) {
-    dtype* tmp_x = (dtype*) malloc( SIZE * sizeof(dtype) );
+void initb (dtype** A, dtype* b, int n, int m) {
+    dtype* tmp_x = (dtype*) malloc( m * sizeof(dtype) );
 
     //printf("Original x: \n");
     int i;
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < m; i++) {
         tmp_x[i] = randDtype();
         //printf("%6.3f", tmp_x[i]);
     }
@@ -92,53 +105,46 @@ void initb (dtype** A, dtype* b, int n) {
     //printf("Original x[0]: %6.3f\n", tmp_x[0]);
 
     // Compute b from random x
-    mat_vec_mult(A, tmp_x, b, n);
+    mat_vec_mult(A, tmp_x, b, n,m);
 }
 
-int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
+int conjgrad (dtype** A, dtype* b, dtype* x, int n, int m) {
     int i;
     // Allocate space
-    dtype* residual = (dtype*) malloc( SIZE * sizeof(dtype) );
-    dtype* dir_vec  = (dtype*) malloc( SIZE * sizeof(dtype) );
-    dtype* Ap       = (dtype*) malloc( SIZE * sizeof(dtype) );
-    /*
-    for (i = 0; i < n; i++) {
-        residual[i] = 0;
-        //dir_vec[i] = 0;
-        Ap[i] = 0;
-    }
-    */
+    dtype* residual = (dtype*) malloc( m * sizeof(dtype) );
+    dtype* dir_vec  = (dtype*) malloc( m * sizeof(dtype) );
+    dtype* Ap       = (dtype*) malloc( m * sizeof(dtype) );
     dtype alpha;
     dtype rsnew;
 
 
     // Compute initial residual
-    mat_vec_mult(A, x, residual, n);
-    for (i = 0; i < n; i++) {
+    mat_vec_mult(A, x, residual, n, m);
+    for (i = 0; i < m; i++) {
         residual[i] = b[i] - residual[i];
 
         // Residual is the initial search direction
         dir_vec[i] = residual[i];
     }
 
-    dtype rsold = inner_prod(residual, residual, n);
+    dtype rsold = inner_prod(residual, residual, m);
 
     int j;
     //printf("\nresiduals\n------------\n");
     for (i = 0; i<n; i++) {
-        mat_vec_mult(A, dir_vec, Ap, n);
+        mat_vec_mult(A, dir_vec, Ap, n,m);
 
-        alpha = rsold / inner_prod(dir_vec, Ap, n);
+        alpha = rsold / inner_prod(dir_vec, Ap, m);
 
         // Update x
-        for (j = 0; j < n; j++)
+        for (j = 0; j < m; j++)
             x[j] += alpha * dir_vec[j];
 
         // Update residual
-        for (j = 0; j < n; j++)
+        for (j = 0; j < m; j++)
             residual[j] -= alpha * Ap[j];
 
-        rsnew = inner_prod(residual, residual, n);
+        rsnew = inner_prod(residual, residual, m);
 
         // Print residual error
         //printf("%f\n", sqrt(rsnew));
@@ -149,7 +155,7 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
         }
 
         // Update direction vector
-        for (j = 0; j < n; j++)
+        for (j = 0; j < m; j++)
             dir_vec[j] = residual[j] + (rsnew/rsold) * dir_vec[j];
 
         rsold = rsnew;
@@ -167,10 +173,12 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
 int main(int argc, char** argv) {
     // Assume matrix A is [sizexsize]
     srand( time(NULL) );
+    int bandsize = 2; // Init matrix w/ semibandwith of bandsize
+    int cols = 2*bandsize+1;
 
     // Init matrix A
     // -------------
-    dtype* Astorage = malloc ( SIZE * SIZE * sizeof(dtype) );
+    dtype* Astorage = malloc ( SIZE * cols * sizeof(dtype) );
     if (Astorage == NULL) {
         printf("Astorage mem could not allocate\n");
         exit(0);
@@ -184,11 +192,10 @@ int main(int argc, char** argv) {
 
     int i;
     for (i=0; i < SIZE; i++)
-        A[i] = &Astorage[i * SIZE];
+        A[i] = &Astorage[i * cols];
 
-    int bandsize = 2; // Init matrix w/ semibandwith of bandsize
     initA(A,bandsize,SIZE);
-    //printA(A,SIZE);
+    printA(A,SIZE,cols);
     // -------------
 
     // Init vector b
@@ -198,7 +205,7 @@ int main(int argc, char** argv) {
         printf("A mem could not allocate\n");
         exit(0);
     }
-    initb(A,b,SIZE);
+    initb(A,b,SIZE,cols);
     // -------------
 
 
@@ -229,7 +236,7 @@ int main(int argc, char** argv) {
     gettimeofday(&start_time,NULL);
 
     // Compute conjugate gradient
-    int iters = conjgrad(A, b, x, SIZE);
+    int iters = conjgrad(A, b, x, SIZE,cols);
     //printf("\nx\n---------\n");
     //printb(x,SIZE);
 

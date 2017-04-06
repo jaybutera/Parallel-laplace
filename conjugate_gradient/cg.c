@@ -6,7 +6,7 @@
 
 #define dtype float
 
-#define SIZE 10
+#define SIZE 4
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     // 2*N FLOP
@@ -29,17 +29,36 @@ void printb (dtype* b, int n) {
     printf("\n");
 }
 
-void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n, int m) {
+void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n, int band) {
     // 2*N^2 FLOP
-    int i,j;
-    #pragma omp parallel for private(j)
+    int i,j,k;
+    int m = 2*band + 1;
+    //#pragma omp parallel for private(j)
     //#pragma acc kernels
-    for (i = 0; i < n; i++) {
+
+    printf("band: %d\n",band);
+    // No edge cases
+    for (i = band; i < n-band; i++) {
         b[i] = 0;
-        //#pragma acc kernels
-        for (j = 0; j < m; j++) {
-            b[i] += A[i][j] * x[j];
+        for (j = 0, k = i-band; j < m; j++) {
+            printf("b[%d](%f) += A[%d][%d](%f) * x[%d+%d] (%f)\n",i,b[i],i,j,A[i][j],j,k,x[j+k]);
+            b[i] += A[i][j] * x[j+k];
+            printf("b[%d] = %f\n",i,b[i]);
         }
+    }
+
+    // Top edge case
+    for (i = 0; i < band; i++) {
+        b[i] = 0;
+        printf("b[%d] = 0\n",i);
+        for (j = 0; j < m; j++)
+            b[i] += A[i][j] * x[j];
+    }
+    // Bottom edge case
+    for (i = n-band; i < n; i++) {
+        b[i] = 0;
+        for (j = 0, k = n-m; j < m; j++)
+            b[i] += x[j+k] * A[i][j];
     }
 }
 
@@ -48,14 +67,15 @@ dtype randDtype () {
 }
 
 void initA (dtype** A, int band, int n) {
-    //dtype counter = 0;
+    dtype counter = 0;
     int i,j,k;
     int m = 2*band+1; // Num columns
 
-    #pragma omp parallel for private(j)
+    //#pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
         for (j = 0; j < m; j++) {
-            A[i][j] = randDtype();
+            //A[i][j] = randDtype();
+            A[i][j] = counter++;
         }
     }
 
@@ -92,20 +112,22 @@ void printA (dtype** A, int n, int m) {
     printf("\n");
 }
 
-void initb (dtype** A, dtype* b, int n, int m) {
-    dtype* tmp_x = (dtype*) malloc( m * sizeof(dtype) );
+void initb (dtype** A, dtype* b, int n, int band) {
+    int m = 2*band+1;
+    dtype* tmp_x = (dtype*) malloc( n * sizeof(dtype) );
 
-    //printf("Original x: \n");
+    printf("Original x: \n");
     int i;
-    for (i = 0; i < m; i++) {
+    for (i = 0; i < n; i++) {
+        tmp_x[i] = i+1;
         tmp_x[i] = randDtype();
-        //printf("%6.3f", tmp_x[i]);
+        printf("%6.3f", tmp_x[i]);
     }
-    //printf("\n");
+    printf("\n");
     //printf("Original x[0]: %6.3f\n", tmp_x[0]);
 
     // Compute b from random x
-    mat_vec_mult(A, tmp_x, b, n,m);
+    mat_vec_mult(A, tmp_x, b, n, band);
 }
 
 int conjgrad (dtype** A, dtype* b, dtype* x, int n, int m) {
@@ -173,7 +195,7 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n, int m) {
 int main(int argc, char** argv) {
     // Assume matrix A is [sizexsize]
     srand( time(NULL) );
-    int bandsize = 2; // Init matrix w/ semibandwith of bandsize
+    int bandsize = 1; // Init matrix w/ semibandwith of bandsize
     int cols = 2*bandsize+1;
 
     // Init matrix A
@@ -195,7 +217,7 @@ int main(int argc, char** argv) {
         A[i] = &Astorage[i * cols];
 
     initA(A,bandsize,SIZE);
-    printA(A,SIZE,cols);
+    //printA(A,SIZE,cols);
     // -------------
 
     // Init vector b
@@ -205,7 +227,7 @@ int main(int argc, char** argv) {
         printf("A mem could not allocate\n");
         exit(0);
     }
-    initb(A,b,SIZE,cols);
+    ///initb(A,b,SIZE,cols);
     // -------------
 
 
@@ -217,18 +239,20 @@ int main(int argc, char** argv) {
         exit(0);
     }
     for (i = 0; i < SIZE; i++)
-        x[i] = 0;
+        x[i] = i+1;
+        //x[i] = randDtype();
     // -------------
 
     // Time record
     struct timeval start_time, stop_time, elapsed_time;
 
-    /*
     printf("A\n---------\n");
-    printA(A, SIZE);
+    printA(A, SIZE, cols);
+    printf("x\n---------\n");
+    printb(x, SIZE);
+    mat_vec_mult(A,x,b,SIZE,bandsize);
     printf("B\n---------\n");
     printb(b, SIZE);
-    */
 
     //-----------
     // Start time
@@ -236,7 +260,7 @@ int main(int argc, char** argv) {
     gettimeofday(&start_time,NULL);
 
     // Compute conjugate gradient
-    int iters = conjgrad(A, b, x, SIZE,cols);
+    int iters = 0;//conjgrad(A, b, x, SIZE,cols);
     //printf("\nx\n---------\n");
     //printb(x,SIZE);
 

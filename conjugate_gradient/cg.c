@@ -30,12 +30,21 @@ void printb (dtype* b, int n) {
 void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     // 2*N^2 FLOP
     int i,j;
-    #pragma omp parallel for private(j)
+    //#pragma omp parallel for private(j)
+    #pragma acc region
+    {
+    #pragma acc loop independent
+    {
     for (i = 0; i < n; i++) {
         b[i] = 0;
+        #pragma acc loop independent
+        {
         for (j = 0; j < n; j++) {
             b[i] += A[i][j] * x[j];
         }
+        }
+    }
+    }
     }
 }
 

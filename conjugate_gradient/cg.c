@@ -6,7 +6,7 @@
 
 #define dtype float
 
-#define SIZE 2
+#define SIZE 10
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     // 2*N FLOP
@@ -37,7 +37,7 @@ void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n, int band) {
     //#pragma acc kernels
 
     // No edge cases
-    for (i = band; i < n-band; i++) {
+    for (i = band; i < n-1-band; i++) {
         b[i] = 0;
         for (j = 0, k = i-band; j < m; j++) {
             //printf("b[%d](%f) += A[%d][%d](%f) * x[%d+%d] (%f)\n",i,b[i],i,j,A[i][j],j,k,x[j+k]);
@@ -55,7 +55,7 @@ void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n, int band) {
     }
     // Bottom edge case
     if (n < m) m = n;
-    for (i = n-band; i < n; i++) {
+    for (i = n-1-band; i < n; i++) {
         b[i] = 0;
         for (j = 0, k = n-m; j < m; j++)
             b[i] += x[j+k] * A[i][j];
@@ -74,8 +74,8 @@ void initA (dtype** A, int n, int band) {
     //#pragma omp parallel for private(j)
     for (i = 0; i < n; i++) {
         for (j = 0; j < m; j++) {
-            ///A[i][j] = randDtype();
-            A[i][j] = counter++;
+            A[i][j] = randDtype();
+            //A[i][j] = counter++;
         }
     }
 
@@ -195,7 +195,7 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n, int band) {
 int main(int argc, char** argv) {
     // Assume matrix A is [sizexsize]
     srand( time(NULL) );
-    int bandsize = 2; // Init matrix w/ semibandwith of bandsize
+    int bandsize = 1; // Init matrix w/ semibandwith of bandsize
     int cols = 2*bandsize+1;
 
     // Init matrix A
@@ -216,12 +216,14 @@ int main(int argc, char** argv) {
     for (i=0; i < SIZE; i++)
         A[i] = &Astorage[i * cols];
 
-    //initA(A,SIZE,bandsize);
+    initA(A,SIZE,bandsize);
     //printA(A,SIZE,cols);
+    /*
     A[0][0] = 4;
     A[0][1] = 1;
     A[1][0] = 1;
     A[1][1] = 3;
+    */
 
     // -------------
 
@@ -232,9 +234,9 @@ int main(int argc, char** argv) {
         printf("A mem could not allocate\n");
         exit(0);
     }
-    //initb(A,b,SIZE,bandsize);
-    b[0] = 1;
-    b[1] = 2;
+    initb(A,b,SIZE,bandsize);
+    //b[0] = 1;
+    //b[1] = 2;
     // -------------
 
 
@@ -247,23 +249,21 @@ int main(int argc, char** argv) {
     }
     for (i = 0; i < SIZE; i++)
         //x[i] = i+1;
-        //x[i] = randDtype();
-    x[0] = 2;
-    x[1] = 1;
+        x[i] = randDtype();
+    //x[0] = 2;
+    //x[1] = 1;
     // -------------
 
     // Time record
     struct timeval start_time, stop_time, elapsed_time;
 
-    /*
     printf("A\n---------\n");
     printA(A, SIZE, cols);
-    printf("x\n---------\n");
-    printb(x, SIZE);
-    mat_vec_mult(A,x,b,SIZE,bandsize);
-    printf("B\n---------\n");
+    //printf("x\n---------\n");
+    //printb(x, SIZE);
+    //mat_vec_mult(A,x,b,SIZE,bandsize);
+    printf("b\n---------\n");
     printb(b, SIZE);
-    */
 
     //-----------
     // Start time

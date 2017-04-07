@@ -1,12 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <omp.h>
+//#include <omp.h>
+#include <mpi.h>
 #include <sys/time.h>
 
 #define dtype float
 
-#define SIZE 2048
+#define BLOCK_LOW(id,p,n) ((id) * (n)) / (p)
+#define BLOCK_HIGH(id,p,n) (BLOCK_LOW((id)+1,p,n)-1)
+#define BLOCK_SIZE(id,p,n) (BLOCK_HIGH(id,p,n) - BLOCK_LOW(id,p,n)+1)
+#define BLOCK_OWNER(k,p,n) (((p)*(k+1)-1)/n)
+
+#define SIZE 8
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     // 2*N FLOP
@@ -27,13 +33,13 @@ void printb (dtype* b, int n) {
     printf("\n");
 }
 
-void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
+void mat_vec_mult (dtype** A, dtype* x, dtype* b, int rows, int cols) {
     // 2*N^2 FLOP
     int i,j;
-    #pragma omp parallel for private(j)
-    for (i = 0; i < n; i++) {
+    //#pragma omp parallel for private(j)
+    for (i = 0; i < rows; i++) {
         b[i] = 0;
-        for (j = 0; j < n; j++) {
+        for (j = 0; j < cols; j++) {
             b[i] += A[i][j] * x[j];
         }
     }
@@ -43,20 +49,25 @@ dtype randDtype () {
     return (dtype)rand() / (dtype)RAND_MAX;
 }
 
-void initA (dtype** A, int n) {
-    //dtype counter = 0;
+void initA (dtype** A, int rank, int p, int n) {
+    int i_low = BLOCK_LOW(rank, p, n);
+    int i_high = BLOCK_LOW(rank+1, p, n);
+    int bsize = BLOCK_SIZE(rank,p,n);
+
     int i,j,k;
-    for (i = 0; i < n; i++) {
+    // Init to random
+    for (i = 0; i < bsize; i++) {
         for (j = 0; j < n; j++) {
             A[i][j] = randDtype();
         }
     }
 
     // Make diagonal dominant
-    for (i = 0; i < n; i++) {
-        A[i][i] = 1;
+    int diag = i_low;
+    for (i = 0; i < bsize; i++, diag++) {
+        A[i][diag] = 1;
         for (k = 0; k < n; k++)
-            A[i][i] += A[i][k];
+            A[i][diag] += A[i][k];
     }
 }
 
@@ -70,20 +81,17 @@ void printA (dtype** A, int n) {
     printf("\n");
 }
 
-void initb (dtype** A, dtype* b, int n) {
-    dtype* tmp_x = (dtype*) malloc( SIZE * sizeof(dtype) );
-
-    //printf("Original x: \n");
+void initb (dtype** A, dtype* x, dtype* b, int n) {
+    /*
     int i;
     for (i = 0; i < n; i++) {
         tmp_x[i] = randDtype();
         //printf("%6.3f", tmp_x[i]);
     }
-    //printf("\n");
-    //printf("Original x[0]: %6.3f\n", tmp_x[0]);
+    */
 
     // Compute b from random x
-    mat_vec_mult(A, tmp_x, b, n);
+    mat_vec_mult(A, x, b, n, SIZE);
 }
 
 int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
@@ -104,7 +112,7 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
 
 
     // Compute initial residual
-    mat_vec_mult(A, x, residual, n);
+    mat_vec_mult(A, x, residual, n, SIZE);
     for (i = 0; i < n; i++) {
         residual[i] = b[i] - residual[i];
 
@@ -117,7 +125,7 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
     int j;
     //printf("\nresiduals\n------------\n");
     for (i = 0; i<n; i++) {
-        mat_vec_mult(A, dir_vec, Ap, n);
+        mat_vec_mult(A, dir_vec, Ap, n, SIZE);
 
         alpha = rsold / inner_prod(dir_vec, Ap, n);
 
@@ -156,34 +164,58 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n) {
 }
 
 int main(int argc, char** argv) {
+    int rank, p;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    int bsize = BLOCK_SIZE(rank,p,SIZE);
+
     // Assume matrix A is [sizexsize]
     srand( time(NULL) );
 
     // Init matrix A
     // -------------
-    dtype* Astorage = malloc ( SIZE * SIZE * sizeof(dtype) );
+    dtype* Astorage = (dtype*) malloc ( bsize * SIZE * sizeof(dtype) );
     if (Astorage == NULL) {
-        printf("Astorage mem could not allocate\n");
+        printf("Astorage mem could not allocated\n");
         exit(0);
     }
 
-    dtype** A = (dtype**) malloc(SIZE * sizeof(dtype*));
+    dtype** A = (dtype**) malloc(bsize * sizeof(dtype*));
     if (A == NULL) {
         printf("A mem could not allocate\n");
         exit(0);
     }
 
     int i;
-    for (i=0; i < SIZE; i++)
+    for (i=0; i < bsize; i++)
         A[i] = &Astorage[i * SIZE];
 
-    initA(A,SIZE);
-    //printA(A,SIZE);
+    //initA(A,rank,p,SIZE);
+
+    /*
+    if (!rank)
+        printf("A\n---------\n");
+        printA(A,SIZE);
+        */
+    // -------------
+
+    // Init vector x
+    // -------------
+    dtype* x = (dtype*) malloc (SIZE * sizeof(dtype));
+    if (x == NULL) {
+        printf("x mem could not allocate\n");
+        exit(0);
+    }
+    for (i = 0; i < SIZE; i++)
+        x[i] = 0;
     // -------------
 
     // Init vector b
     // -------------
-    dtype* b = (dtype*) malloc(SIZE * sizeof(dtype*));
+    dtype* b = (dtype*) malloc(bsize * sizeof(dtype));
     if (b == NULL) {
         printf("A mem could not allocate\n");
         exit(0);
@@ -216,10 +248,11 @@ int main(int argc, char** argv) {
     //-----------
     // Start time
     //-----------
+    /*
     gettimeofday(&start_time,NULL);
 
     // Compute conjugate gradient
-    int iters = conjgrad(A, b, x, SIZE);
+    int iters = 0;//conjgrad(A, b, x, SIZE);
     //printf("\nx\n---------\n");
     //printb(x,SIZE);
 
@@ -234,7 +267,7 @@ int main(int argc, char** argv) {
     //printb(x,SIZE);
 
     // 2N^3/T
-    //if (!id) {
+    if (!rank) {
         float GFLOPS = (float)((2.f*SIZE*SIZE + 3.f*SIZE) +
                        (float)(iters * 2.f*(SIZE*SIZE + 5.f*SIZE))) /
                        (float)(1000000000.f*(elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0));
@@ -243,12 +276,16 @@ int main(int argc, char** argv) {
         printf("\n--------------------------------\n");
         printf("elapsed time (s): %f\n", ((elapsed_time.tv_sec+elapsed_time.tv_usec/1000000.0)));
         printf("GFLOPS: %f\n", GFLOPS);
-    //}
+    }
+    */
 
     free(Astorage);
     free(A);
-    free(b);
     free(x);
+    if (!rank)
+        free(b);
+
+    MPI_Finalize();
 
     return 0;
 }

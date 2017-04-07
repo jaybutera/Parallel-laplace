@@ -80,16 +80,21 @@ void initA (dtype** A, int n, int band) {
     }
 
     // Insert 0s at edge case
-    for (i = 0; i < band+1; i++)
+    for (i = 0; i < band; i++)
         for (j = band+(i+1); j < m; j++) {
             printf("A[%d][%d] = 0\n",i,j);
             A[i][j] = 0;
         }
-    for (i = n-1; i > n-(band+1); i--)
-        for (j = m-(band+(n-i)); j >= 0; j--) {
+    //for (i = n-1; i > n-(band+1); i--)
+    k = 0;
+    for (i = n-band; i < n; i++) {
+        k++;
+        for (j = 0; j < (m-1)-band-(band-k); j++) {
+        //for (j = m-(band+(n-i)); j >= 0; j--) {
             printf("A[%d][%d] = 0\n",i,j);
             A[i][j] = 0;
          }
+    }
 
 
     // Make diagonal dominant
@@ -195,7 +200,7 @@ int conjgrad (dtype** A, dtype* b, dtype* x, int n, int band) {
 int main(int argc, char** argv) {
     // Assume matrix A is [sizexsize]
     srand( time(NULL) );
-    int bandsize = 1; // Init matrix w/ semibandwith of bandsize
+    int bandsize = 2; // Init matrix w/ semibandwith of bandsize
     int cols = 2*bandsize+1;
 
     // Init matrix A

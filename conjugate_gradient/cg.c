@@ -6,7 +6,7 @@
 
 #define dtype float
 
-#define SIZE 2048
+#define SIZE 8196
 
 dtype inner_prod (dtype* a, dtype* b, int n) {
     // 2*N FLOP
@@ -30,21 +30,17 @@ void printb (dtype* b, int n) {
 void mat_vec_mult (dtype** A, dtype* x, dtype* b, int n) {
     // 2*N^2 FLOP
     int i,j;
-    //#pragma omp parallel for private(j)
-    #pragma acc region
-    {
-    #pragma acc loop independent
-    {
+    dtype sum;
+    #pragma acc parallel loop present(A[0:SIZE][0:SIZE]) independent
     for (i = 0; i < n; i++) {
         b[i] = 0;
-        #pragma acc loop independent
-        {
+        sum = 0;
+        //#pragma acc loop present(A[0:SIZE][0:SIZE]) independent
+        #pragma kernels
         for (j = 0; j < n; j++) {
-            b[i] += A[i][j] * x[j];
+            sum += A[i][j] * x[j];
         }
-        }
-    }
-    }
+        b[i] = sum;
     }
 }
 
@@ -187,6 +183,7 @@ int main(int argc, char** argv) {
         A[i] = &Astorage[i * SIZE];
 
     initA(A,SIZE);
+    #pragma acc enter data copyin(A[0:SIZE][0:SIZE])
     //printA(A,SIZE);
     // -------------
 
@@ -237,6 +234,8 @@ int main(int argc, char** argv) {
     //---------
     gettimeofday(&stop_time,NULL);
     timersub(&stop_time, &start_time, &elapsed_time); // Unix time subtract routine
+
+    #pragma acc exit data delete(A)
 
     //printf("\nFinal x[0]: %6.3f\n", x[0]);
     //printf("\nFinal x\n--------------\n");

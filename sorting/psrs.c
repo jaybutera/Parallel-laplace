@@ -14,17 +14,39 @@ void initArray (int arr[], int n);
 int main (int argc, char** argv) {
     srand( time(NULL) );
 
+    int rank, p;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    int n = (SIZE+1) / p;
+
     // Initialize array
-    dtype local_arr[SIZE];
-    initArray(local_arr, SIZE);
+    dtype local_arr[n];
+    initArray(local_arr, n);
 
     // Sort locally
-    quickSort(local_arr, 0, SIZE-1);
+    quickSort(local_arr, 0, n-1);
 
+    /*
     int i;
-    for (i = 0; i < SIZE; i++)
+    for (i = 0; i < n; i++)
         printf("%d, ", local_arr[i]);
     printf("\n");
+    */
+
+    dtype samples[p-1];
+    // Select local samples
+    int i;
+    for (i = 0; i < p; i++)
+        samples[i] = local_arr[ i * (n/(p*p)) ];
+
+    for (i = 0; i < p; i++)
+        printf("%d, ", samples[i]);
+    printf("\n");
+
+    MPI_Finalize();
 
     return 0;
 }

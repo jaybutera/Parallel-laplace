@@ -4,7 +4,8 @@
 #include <mpi.h>
 
 #define dtype int
-#define SIZE 10
+#define mpi_dtype MPI_INT
+#define SIZE 80
 
 #define BLOCK_LOW(id,p,n) ((id) * (n)) / (p)
 #define BLOCK_HIGH(id,p,n) (BLOCK_LOW((id)+1,p,n)-1)
@@ -42,15 +43,40 @@ int main (int argc, char** argv) {
     printf("\n");
     fflush(stdout);
 
-    dtype samples[p-1];
+    int num_samples = p-1;
+    dtype samples[num_samples];
     // Select local samples
     printf("%d samples: ", rank);
-    for (i = 0; i < p-1; i++)
+    for (i = 0; i < num_samples; i++)
         samples[i] = local_arr[ i * (n/(p*p)) ];
 
-    for (i = 0; i < p-1; i++)
+    for (i = 0; i < num_samples; i++)
         printf("%d, ", samples[i]);
     printf("\n");
+
+    // ------------
+    // Gather all samples to process 0
+    // ------------
+
+    if (!rank) {
+        // Accumulated sample buffer
+        dtype all_samp[p * num_samples];
+
+        MPI_Gather(samples, num_samples, mpi_dtype,
+                   all_samp, num_samples, mpi_dtype,
+                   0, MPI_COMM_WORLD);
+
+        fflush(stdout);
+        printf("Cumulative array: \n");
+        for (i = 0; i < p*num_samples; i++)
+            printf("%d, ", all_samp[i]);
+        printf("\n");
+    }
+    else { // All other processes
+        MPI_Gather(samples, num_samples, mpi_dtype,
+                   NULL, num_samples, mpi_dtype,
+                   0, MPI_COMM_WORLD);
+    }
 
     MPI_Finalize();
 

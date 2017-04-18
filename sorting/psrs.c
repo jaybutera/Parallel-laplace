@@ -6,21 +6,27 @@
 #define dtype int
 #define SIZE 10
 
+#define BLOCK_LOW(id,p,n) ((id) * (n)) / (p)
+#define BLOCK_HIGH(id,p,n) (BLOCK_LOW((id)+1,p,n)-1)
+#define BLOCK_SIZE(id,p,n) (BLOCK_HIGH(id,p,n) - BLOCK_LOW(id,p,n)+1)
+#define BLOCK_OWNER(k,p,n) (((p)*(k+1)-1)/n)
+
 dtype randDtype ();
 int partition( int a[], int l, int r);
 void quickSort( int a[], int l, int r);
 void initArray (int arr[], int n);
 
 int main (int argc, char** argv) {
-    srand( time(NULL) );
-
     int rank, p;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int n = (SIZE+1) / p;
+    srand( time(NULL) );
+
+    //int n = (SIZE / p) + 1;
+    int n = BLOCK_SIZE(rank, p, SIZE);
 
     // Initialize array
     dtype local_arr[n];
@@ -29,20 +35,20 @@ int main (int argc, char** argv) {
     // Sort locally
     quickSort(local_arr, 0, n-1);
 
-    /*
     int i;
+    printf("%d array: ", rank);
     for (i = 0; i < n; i++)
         printf("%d, ", local_arr[i]);
     printf("\n");
-    */
+    fflush(stdout);
 
     dtype samples[p-1];
     // Select local samples
-    int i;
-    for (i = 0; i < p; i++)
+    printf("%d samples: ", rank);
+    for (i = 0; i < p-1; i++)
         samples[i] = local_arr[ i * (n/(p*p)) ];
 
-    for (i = 0; i < p; i++)
+    for (i = 0; i < p-1; i++)
         printf("%d, ", samples[i]);
     printf("\n");
 
@@ -72,8 +78,6 @@ void quickSort( dtype a[], int l, int r) {
        quickSort( a, j+1, r);
    }
 }
-
-
 
 int partition( dtype a[], int l, int r) {
    int pivot, i, j, t;

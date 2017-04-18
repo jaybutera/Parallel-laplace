@@ -45,6 +45,7 @@ int main (int argc, char** argv) {
 
     int num_samples = p-1;
     dtype samples[num_samples];
+
     // Select local samples
     printf("%d samples: ", rank);
     for (i = 0; i < num_samples; i++)
@@ -58,6 +59,11 @@ int main (int argc, char** argv) {
     // Gather all samples to process 0
     // ------------
 
+
+    // Result of this step is a list of pivot points that each
+    // process must recieve
+    dtype pivots[p-1];
+
     if (!rank) {
         // Accumulated sample buffer
         dtype all_samp[p * num_samples];
@@ -66,11 +72,17 @@ int main (int argc, char** argv) {
                    all_samp, num_samples, mpi_dtype,
                    0, MPI_COMM_WORLD);
 
+        /*
         fflush(stdout);
         printf("Cumulative array: \n");
         for (i = 0; i < p*num_samples; i++)
             printf("%d, ", all_samp[i]);
         printf("\n");
+        */
+
+        // Choose pivots from all samples
+        for (i = 1; i < p; i++)
+            pivots[i-1] = all_samp[ i*p + p/2-1 ];
     }
     else { // All other processes
         MPI_Gather(samples, num_samples, mpi_dtype,
@@ -78,13 +90,21 @@ int main (int argc, char** argv) {
                    0, MPI_COMM_WORLD);
     }
 
+    // Broadcast pivot points
+    MPI_Bcast(pivots, p-1, mpi_dtype, 0, MPI_COMM_WORLD);
+
+    printf("%d pivots: ", rank);
+    for (i = 0; i < num_samples; i++)
+        printf("%d, ", pivots[i]);
+    printf("\n");
+
     MPI_Finalize();
 
     return 0;
 }
 
 dtype randDtype () {
-    return rand() % 8196;
+    return rand() % 100;
 }
 
 void initArray (dtype arr[], int n) {
